@@ -190,4 +190,116 @@ describe('Motor de Recomendación Determinístico - Copiloto de Alimentación', 
 
     expect(scoreFast).toBeGreaterThanOrEqual(scoreAuto);
   });
+
+  it('Escenario G: Estado de inventario disponible permite receta completa; no disponible genera faltante', () => {
+    const testRecipe = INITIAL_RECIPES.find((r) => r.id === 'rec_tortilla_zucchini')!;
+    const invAvailable: InventoryItem[] = [
+      { id: 'inv_huevos', name: 'Huevos', category: 'lacteos_huevos', status: 'available', priority: 'normal', updatedAt: '' },
+      { id: 'inv_zucchini', name: 'Zucchini / Calabacín', category: 'verduras', status: 'tengo', priority: 'normal', updatedAt: '' },
+      { id: 'inv_queso', name: 'Queso cremoso / mozzarella', category: 'lacteos_huevos', status: 'tengo', priority: 'normal', updatedAt: '' },
+    ];
+    const invUnavailable: InventoryItem[] = [
+      { id: 'inv_huevos', name: 'Huevos', category: 'lacteos_huevos', status: 'unavailable', priority: 'normal', updatedAt: '' },
+      { id: 'inv_zucchini', name: 'Zucchini / Calabacín', category: 'verduras', status: 'tengo', priority: 'normal', updatedAt: '' },
+      { id: 'inv_queso', name: 'Queso cremoso / mozzarella', category: 'lacteos_huevos', status: 'tengo', priority: 'normal', updatedAt: '' },
+    ];
+
+    const evalAvail = evaluateInventoryAndUtilization(testRecipe, invAvailable);
+    const evalUnavail = evaluateInventoryAndUtilization(testRecipe, invUnavailable);
+
+    expect(evalAvail.missingCoreIngredients.length).toBe(0);
+    expect(evalUnavail.missingCoreIngredients.length).toBeGreaterThan(0);
+    expect(evalAvail.score).toBeGreaterThan(evalUnavail.score);
+  });
+
+  it('Escenario H: Ingrediente marcado como consumir pronto mejora score y genera señal de aprovechamiento', () => {
+    const espinacaRec = INITIAL_RECIPES.find((r) => r.ingredients.some((i) => i.name.toLowerCase().includes('espinaca')))!;
+    const invNormal: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) => ({ ...item, priority: 'normal' as const }));
+    const invConsumeSoon: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) =>
+      item.name.toLowerCase().includes('espinaca')
+        ? { ...item, priority: 'consume_soon' as const, status: 'tengo' as const }
+        : { ...item, priority: 'normal' as const }
+    );
+
+    const rankNormal = rankRecipes(INITIAL_RECIPES, BASE_CONTEXT, invNormal, []).find((r) => r.recipe.id === espinacaRec.id)!;
+    const rankConsumeSoon = rankRecipes(INITIAL_RECIPES, BASE_CONTEXT, invConsumeSoon, []).find((r) => r.recipe.id === espinacaRec.id)!;
+
+    expect(rankConsumeSoon.totalScore).toBeGreaterThan(rankNormal.totalScore);
+    expect(rankConsumeSoon.priorityIngredientsUsed.length).toBeGreaterThan(0);
+  });
+
+  it('Escenario I: Ingrediente prioritario genera mayor o igual impulso que consumir pronto', () => {
+    const espinacaRec = INITIAL_RECIPES.find((r) => r.ingredients.some((i) => i.name.toLowerCase().includes('espinaca')))!;
+    const invNormal: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) => ({ ...item, priority: 'normal' as const }));
+    const invConsumeSoon: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) =>
+      item.name.toLowerCase().includes('espinaca')
+        ? { ...item, priority: 'consumir_pronto' as const, status: 'tengo' as const }
+        : { ...item, priority: 'normal' as const }
+    );
+    const invTopPriority: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) =>
+      item.name.toLowerCase().includes('espinaca')
+        ? { ...item, priority: 'prioritario' as const, status: 'tengo' as const }
+        : { ...item, priority: 'normal' as const }
+    );
+
+    const rankNormal = rankRecipes(INITIAL_RECIPES, BASE_CONTEXT, invNormal, []).find((r) => r.recipe.id === espinacaRec.id)!;
+    const rankConsumeSoon = rankRecipes(INITIAL_RECIPES, BASE_CONTEXT, invConsumeSoon, []).find((r) => r.recipe.id === espinacaRec.id)!;
+    const rankTopPriority = rankRecipes(INITIAL_RECIPES, BASE_CONTEXT, invTopPriority, []).find((r) => r.recipe.id === espinacaRec.id)!;
+
+    expect(rankTopPriority.totalScore).toBeGreaterThanOrEqual(rankConsumeSoon.totalScore);
+    expect(rankTopPriority.totalScore).toBeGreaterThan(rankNormal.totalScore);
+  });
+
+  it('Escenario J: No dominancia - la urgencia temporal prevalece sobre el aprovechamiento', () => {
+    const tightContext: UserContext = { ...BASE_CONTEXT, timeLimit: '15min' };
+    const slowRecipe = INITIAL_RECIPES.find((r) => r.prepTimeMinutes >= 45)!;
+    const fastRecipe = INITIAL_RECIPES.find((r) => r.prepTimeMinutes <= 15)!;
+
+    // Make slow recipe ingredients top priority
+    const invPrioritySlow: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) =>
+      slowRecipe.ingredients.some((ing) => ing.name.toLowerCase().includes(item.name.toLowerCase()))
+        ? { ...item, priority: 'prioritario' as const, status: 'tengo' as const }
+        : item
+    );
+
+    const ranks = rankRecipes(INITIAL_RECIPES, tightContext, invPrioritySlow, []);
+    const fastRank = ranks.find((r) => r.recipe.id === fastRecipe.id)!.rank;
+    const slowRank = ranks.find((r) => r.recipe.id === slowRecipe.id)!.rank;
+
+    expect(fastRank).toBeLessThan(slowRank);
+  });
+
+  it('Escenario K: Estado sin confirmar / desconocido no castiga severamente como no_tengo', () => {
+    const testRecipe = INITIAL_RECIPES.find((r) => r.id === 'rec_tortilla_zucchini')!;
+    const invUnknown: InventoryItem[] = [
+      { id: 'inv_huevos', name: 'Huevos', category: 'lacteos_huevos', status: 'unknown', priority: 'normal', updatedAt: '' },
+      { id: 'inv_zucchini', name: 'Zucchini / Calabacín', category: 'verduras', status: 'tengo', priority: 'normal', updatedAt: '' },
+      { id: 'inv_queso', name: 'Queso cremoso / mozzarella', category: 'lacteos_huevos', status: 'tengo', priority: 'normal', updatedAt: '' },
+    ];
+    const invMissing: InventoryItem[] = [
+      { id: 'inv_huevos', name: 'Huevos', category: 'lacteos_huevos', status: 'no_tengo', priority: 'normal', updatedAt: '' },
+      { id: 'inv_zucchini', name: 'Zucchini / Calabacín', category: 'verduras', status: 'tengo', priority: 'normal', updatedAt: '' },
+      { id: 'inv_queso', name: 'Queso cremoso / mozzarella', category: 'lacteos_huevos', status: 'tengo', priority: 'normal', updatedAt: '' },
+    ];
+
+    const evalUnknown = evaluateInventoryAndUtilization(testRecipe, invUnknown);
+    const evalMissing = evaluateInventoryAndUtilization(testRecipe, invMissing);
+
+    expect(evalUnknown.score).toBeGreaterThan(evalMissing.score);
+  });
+
+  it('Escenario M: Genera explicaciones transparentes cuando se aprovechan ingredientes', () => {
+    const espinacaRec = INITIAL_RECIPES.find((r) => r.ingredients.some((i) => i.name.toLowerCase().includes('espinaca')))!;
+    const invWithPriority: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) =>
+      item.name.toLowerCase().includes('espinaca')
+        ? { ...item, priority: 'consumir_pronto' as const, status: 'tengo' as const }
+        : { ...item, priority: 'normal' as const }
+    );
+
+    const ranking = rankRecipes(INITIAL_RECIPES, BASE_CONTEXT, invWithPriority, []).find(
+      (r) => r.recipe.id === espinacaRec.id
+    )!;
+
+    expect(ranking.positiveReasons.some((r) => r.toLowerCase().includes('aprovecha') || r.toLowerCase().includes('espinaca'))).toBe(true);
+  });
 });

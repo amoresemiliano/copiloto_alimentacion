@@ -27,9 +27,27 @@ export interface UserContext {
   lastUpdated: string;
 }
 
-export type IngredientAvailability = 'tengo' | 'queda_poco' | 'no_tengo';
+export type IngredientAvailability =
+  | 'tengo'
+  | 'queda_poco'
+  | 'no_tengo'
+  | 'desconocido'
+  | 'available'
+  | 'low'
+  | 'unavailable'
+  | 'unknown';
 
-export type IngredientPriority = 'normal' | 'consumir_pronto' | 'prioritario';
+export type IngredientPriority =
+  | 'normal'
+  | 'consumir_pronto'
+  | 'prioritario'
+  | 'consumeSoon'
+  | 'consume_soon'
+  | 'priority';
+
+export type StorageLocation = 'heladera' | 'freezer' | 'despensa' | 'frutas_verduras' | 'otra';
+
+export type ConfidenceLevel = 'confirmed' | 'likely' | 'uncertain';
 
 export interface InventoryItem {
   id: string;
@@ -37,6 +55,15 @@ export interface InventoryItem {
   category: 'verduras' | 'lacteos_huevos' | 'carnes_proteinas' | 'despensa' | 'frutas' | 'otros';
   status: IngredientAvailability;
   priority: IngredientPriority;
+  approximateQuantity?: string;
+  unit?: string;
+  location?: StorageLocation;
+  purchaseDate?: string;
+  openedDate?: string;
+  declaredExpiryDate?: string;
+  confidence?: ConfidenceLevel;
+  source?: 'manual' | 'fixture' | 'recipe_deduction';
+  notes?: string;
   unitDemo?: string;
   quantityDemo?: string;
   updatedAt: string;
@@ -129,6 +156,13 @@ export type TelemetryEventName =
   | 'meal_logged'
   | 'inventory_changed'
   | 'priority_ingredient_changed'
+  | 'inventory_item_added'
+  | 'inventory_status_changed'
+  | 'inventory_quantity_changed'
+  | 'utilization_status_changed'
+  | 'inventory_item_removed'
+  | 'utilization_recommendations_viewed'
+  | 'utilization_recipe_selected'
   | 'telemetry_inspected'
   | 'fixtures_reset';
 

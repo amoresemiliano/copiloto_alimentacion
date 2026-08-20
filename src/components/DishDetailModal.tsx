@@ -143,6 +143,14 @@ export const DishDetailModal: React.FC = () => {
                   {recipe.ingredients.map((ing, i) => {
                     const invItem = ing.inventoryItemId ? inventoryMap.get(ing.inventoryItemId) : null;
                     const status = invItem ? invItem.status : 'tengo';
+                    const isAvail = status === 'tengo' || status === 'available';
+                    const isLow = status === 'queda_poco' || status === 'low';
+                    const isUnknown = status === 'desconocido' || status === 'unknown';
+                    const isPriority =
+                      invItem?.priority === 'prioritario' ||
+                      invItem?.priority === 'priority' ||
+                      invItem?.priority === 'consumir_pronto' ||
+                      invItem?.priority === 'consume_soon';
 
                     return (
                       <div
@@ -150,10 +158,12 @@ export const DishDetailModal: React.FC = () => {
                         className="flex items-center justify-between py-2 px-3 rounded-xl bg-[#F9F9F8] border border-[#E5E5E3] text-xs"
                       >
                         <div className="flex items-center gap-2">
-                          {status === 'tengo' ? (
+                          {isAvail ? (
                             <CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D32] shrink-0" />
-                          ) : status === 'queda_poco' ? (
+                          ) : isLow ? (
                             <AlertCircle className="w-3.5 h-3.5 text-[#B78103] shrink-0" />
+                          ) : isUnknown ? (
+                            <Info className="w-3.5 h-3.5 text-[#8C8C8C] shrink-0" />
                           ) : (
                             <AlertCircle className="w-3.5 h-3.5 text-[#D9381E] shrink-0" />
                           )}
@@ -161,6 +171,12 @@ export const DishDetailModal: React.FC = () => {
                           {ing.optional && (
                             <span className="text-[10px] text-[#8C8C8C] bg-[#E5E5E3] px-1.5 py-0.2 rounded-full">
                               opcional
+                            </span>
+                          )}
+                          {isPriority && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#FF6321] bg-[#FFF1EB] px-1.5 py-0.5 rounded-full">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              Aprovechar
                             </span>
                           )}
                         </div>
@@ -171,14 +187,16 @@ export const DishDetailModal: React.FC = () => {
                           )}
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                              status === 'tengo'
+                              isAvail
                                 ? 'bg-[#E8F5E9] text-[#2E7D32]'
-                                : status === 'queda_poco'
+                                : isLow
                                 ? 'bg-[#FFF8E1] text-[#B78103]'
+                                : isUnknown
+                                ? 'bg-[#F5F5F5] text-[#666666]'
                                 : 'bg-[#FDF2F0] text-[#D9381E]'
                             }`}
                           >
-                            {status === 'tengo' ? 'Tengo' : status === 'queda_poco' ? 'Queda poco' : 'Falta'}
+                            {isAvail ? 'Tengo' : isLow ? 'Queda poco' : isUnknown ? 'Sin confirmar' : 'Falta'}
                           </span>
                         </div>
                       </div>

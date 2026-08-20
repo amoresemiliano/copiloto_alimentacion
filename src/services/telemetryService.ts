@@ -84,6 +84,16 @@ class TelemetryService {
     const rejections = events.filter((e) => e.eventName === 'recommendation_rejected');
     const mealLogs = events.filter((e) => e.eventName === 'meal_logged');
     const generated = events.filter((e) => e.eventName === 'recommendations_generated');
+    const utilizationViews = events.filter((e) => e.eventName === 'utilization_recommendations_viewed');
+    const inventoryUpdates = events.filter(
+      (e) =>
+        e.eventName === 'inventory_status_changed' ||
+        e.eventName === 'inventory_changed' ||
+        e.eventName === 'utilization_status_changed' ||
+        e.eventName === 'priority_ingredient_changed' ||
+        e.eventName === 'inventory_quantity_changed'
+    );
+    const itemsAdded = events.filter((e) => e.eventName === 'inventory_item_added');
 
     const deviations = mealLogs.filter((e) => e.payload?.wasSuggested === false);
     const suggestedLogged = mealLogs.filter((e) => e.payload?.wasSuggested === true);
@@ -96,6 +106,12 @@ class TelemetryService {
       ? (ranksChosen.reduce((a, b) => a + b, 0) / ranksChosen.length).toFixed(1)
       : 'N/A';
 
+    // H5 metric: Selections of dishes that use priority/consume-soon items
+    const utilizationSelections = selections.filter((e) => {
+      const used = e.payload?.priorityIngredientsUsed;
+      return Array.isArray(used) && used.length > 0;
+    });
+
     return {
       totalEvents: events.length,
       generationsCount: generated.length,
@@ -105,6 +121,11 @@ class TelemetryService {
       suggestedLoggedCount: suggestedLogged.length,
       spontaneousDeviationsCount: deviations.length,
       averageRankChosen: avgRankChosen,
+      // Phase 2 H5 & H6 signals
+      utilizationViewsCount: utilizationViews.length,
+      utilizationSelectionsCount: utilizationSelections.length,
+      inventoryUpdatesCount: inventoryUpdates.length,
+      inventoryItemsAddedCount: itemsAdded.length,
     };
   }
 }

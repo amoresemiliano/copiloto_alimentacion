@@ -20,11 +20,17 @@ interface AppContextType {
   recentMeals: MealEvent[];
   recipes: Recipe[];
   recommendations: Recommendation[];
+  allRankedRecommendations: Recommendation[];
   activeChosenRecommendation: Recommendation | null;
   rejectedRecipeIds: string[];
   currentTab: 'ahora' | 'cocina' | 'historial' | 'mas';
   telemetryEvents: TelemetryEvent[];
   
+  // Phase 2: Utilization focus
+  utilizationFilterIngredient: string | null;
+  setUtilizationFilterIngredient: (ingredientName: string | null) => void;
+  focusUtilizationIngredient: (ingredientName: string) => void;
+
   // UI & modal state
   detailRecommendation: Recommendation | null;
   rejectionTargetRecommendation: Recommendation | null;
@@ -50,8 +56,11 @@ interface AppContextType {
     customText?: string;
     wasSuggested: boolean;
   }) => void;
+  addInventoryItem: (item: Omit<InventoryItem, 'id' | 'updatedAt'>) => void;
+  removeInventoryItem: (id: string) => void;
   updateInventoryItemStatus: (id: string, status: InventoryItem['status']) => void;
   updateInventoryItemPriority: (id: string, priority: InventoryItem['priority']) => void;
+  updateInventoryItemDetails: (id: string, updates: Partial<InventoryItem>) => void;
   resetAllFixtures: () => void;
   refreshTelemetry: () => void;
   clearRejectedList: () => void;
@@ -67,6 +76,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [rejectedRecipeIds, setRejectedRecipeIds] = useState<string[]>(() => storageService.getRejectedRecipeIds());
   const [chosenRecipeId, setChosenRecipeId] = useState<string | null>(() => storageService.getChosenRecipeId());
   const [currentTab, setCurrentTab] = useState<'ahora' | 'cocina' | 'historial' | 'mas'>('ahora');
+  const [utilizationFilterIngredient, setUtilizationFilterIngredient] = useState<string | null>(null);
 
   // Modals
   const [detailRecommendation, setDetailRecommendation] = useState<Recommendation | null>(null);
@@ -91,10 +101,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return rankRecipes(recipes, context, inventory, recentMeals, rejectedRecipeIds);
   }, [recipes, context, inventory, recentMeals, rejectedRecipeIds]);
 
-  // Limit to top 4 recommendations for the main view to reduce decision fatigue
+  // Limit to top 4 recommendations for the main view to reduce decision fatigue (or filtered by utilization focus)
   const visibleRecommendations = useMemo(() => {
+    if (utilizationFilterIngredient) {
+      const filtered = allRankedRecommendations.filter((rec) =>
+        rec.recipe.ingredients.some(
+          (ing) =>
+            ing.name.toLowerCase().includes(utilizationFilterIngredient.toLowerCase()) ||
+            utilizationFilterIngredient.toLowerCase().includes(ing.name.toLowerCase())
+        )
+      );
+      return filtered.slice(0, 4);
+    }
     return allRankedRecommendations.slice(0, 4);
-  }, [allRankedRecommendations]);
+  }, [allRankedRecommendations, utilizationFilterIngredient]);
 
   // Track recommendation generation
   useEffect(() => {
@@ -103,6 +123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         count: visibleRecommendations.length,
         topRecipeIds: visibleRecommendations.map((r) => r.recipe.id),
         topScores: visibleRecommendations.map((r) => r.totalScore),
+        utilizationFilter: utilizationFilterIngredient,
         contextSnapshot: {
           moment: context.moment,
           hunger: context.hunger,
@@ -113,7 +134,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       setTelemetryEvents(telemetryService.getEvents());
     }
-  }, [visibleRecommendations, context]);
+  }, [visibleRecommendations, context, utilizationFilterIngredient]);
+
+  // Focus on a specific utilization ingredient from Mi Cocina
+  const focusUtilizationIngredient = useCallback((ingredientName: string) => {
+    setUtilizationFilterIngredient(ingredientName);
+    setCurrentTab('ahora');
+    telemetryService.track('utilization_recommendations_viewed', {
+      ingredientName,
+    });
+    setTelemetryEvents(telemetryService.getEvents());
+  }, []);
 
   // Active chosen recommendation instance
   const activeChosenRecommendation = useMemo(() => {
@@ -166,6 +197,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const selectRecommendation = useCallback((rec: Recommendation) => {
     setChosenRecipeId(rec.recipe.id);
     storageService.saveChosenRecipeId(rec.recipe.id);
+
+    // If recipe was chosen from a utilization focus or uses priority ingredients, track utilization_recipe_selected
+    if (utilizationFilterIngredient || rec.priorityIngredientsUsed.length > 0) {
+      telemetryService.track('utilization_recipe_selected', {
+        recipeId: rec.recipe.id,
+        recipeName: rec.recipe.name,
+        rank: rec.rank,
+        utilizationFilter: utilizationFilterIngredient,
+        priorityIngredientsUsed: rec.priorityIngredientsUsed,
+      });
+    }
+
     telemetryService.track('recommendation_selected', {
       recommendationId: rec.id,
       recipeId: rec.recipe.id,
@@ -173,13 +216,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       rank: rec.rank,
       score: rec.totalScore,
       matchPercentage: rec.matchPercentage,
+      priorityIngredientsUsed: rec.priorityIngredientsUsed,
       contextSnapshot: context,
     });
     setTelemetryEvents(telemetryService.getEvents());
     if (detailRecommendation) {
       setDetailRecommendation(null);
     }
-  }, [context, detailRecommendation]);
+  }, [context, detailRecommendation, utilizationFilterIngredient]);
 
   const clearChosenRecommendation = useCallback(() => {
     setChosenRecipeId(null);
@@ -287,10 +331,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTelemetryEvents(telemetryService.getEvents());
   }, [context, recentMeals]);
 
+  const addInventoryItem = useCallback((itemData: Omit<InventoryItem, 'id' | 'updatedAt'>) => {
+    setInventory((prev) => {
+      const newItem: InventoryItem = {
+        ...itemData,
+        id: `inv_custom_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        updatedAt: new Date().toISOString(),
+      };
+      const next = [newItem, ...prev];
+      storageService.saveInventory(next);
+      telemetryService.track('inventory_item_added', {
+        itemId: newItem.id,
+        name: newItem.name,
+        category: newItem.category,
+        status: newItem.status,
+        priority: newItem.priority,
+        location: newItem.location,
+        approximateQuantity: newItem.approximateQuantity,
+      });
+      setTelemetryEvents(telemetryService.getEvents());
+      return next;
+    });
+  }, []);
+
+  const removeInventoryItem = useCallback((id: string) => {
+    setInventory((prev) => {
+      const target = prev.find((i) => i.id === id);
+      const next = prev.filter((i) => i.id !== id);
+      storageService.saveInventory(next);
+      telemetryService.track('inventory_item_removed', {
+        itemId: id,
+        name: target?.name,
+      });
+      setTelemetryEvents(telemetryService.getEvents());
+      return next;
+    });
+  }, []);
+
   const updateInventoryItemStatus = useCallback((id: string, status: InventoryItem['status']) => {
     setInventory((prev) => {
       const next = prev.map((item) => (item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item));
       storageService.saveInventory(next);
+      telemetryService.track('inventory_status_changed', { itemId: id, newStatus: status });
       telemetryService.track('inventory_changed', { itemId: id, newStatus: status });
       setTelemetryEvents(telemetryService.getEvents());
       return next;
@@ -301,7 +383,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setInventory((prev) => {
       const next = prev.map((item) => (item.id === id ? { ...item, priority, updatedAt: new Date().toISOString() } : item));
       storageService.saveInventory(next);
+      telemetryService.track('utilization_status_changed', { itemId: id, newPriority: priority });
       telemetryService.track('priority_ingredient_changed', { itemId: id, newPriority: priority });
+      setTelemetryEvents(telemetryService.getEvents());
+      return next;
+    });
+  }, []);
+
+  const updateInventoryItemDetails = useCallback((id: string, updates: Partial<InventoryItem>) => {
+    setInventory((prev) => {
+      const next = prev.map((item) => (item.id === id ? { ...item, ...updates, updatedAt: new Date().toISOString() } : item));
+      storageService.saveInventory(next);
+      if (updates.approximateQuantity !== undefined) {
+        telemetryService.track('inventory_quantity_changed', { itemId: id, approximateQuantity: updates.approximateQuantity });
+      } else {
+        telemetryService.track('inventory_changed', { itemId: id, updates });
+      }
       setTelemetryEvents(telemetryService.getEvents());
       return next;
     });
@@ -314,6 +411,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRecentMeals([...INITIAL_RECENT_MEALS]);
     setRejectedRecipeIds([]);
     setChosenRecipeId(null);
+    setUtilizationFilterIngredient(null);
     telemetryService.track('fixtures_reset', {});
     setTelemetryEvents(telemetryService.getEvents());
   }, []);
@@ -328,10 +426,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     recentMeals,
     recipes,
     recommendations: visibleRecommendations,
+    allRankedRecommendations,
     activeChosenRecommendation,
     rejectedRecipeIds,
     currentTab,
     telemetryEvents,
+    utilizationFilterIngredient,
+    setUtilizationFilterIngredient,
+    focusUtilizationIngredient,
     detailRecommendation,
     rejectionTargetRecommendation,
     isLogMealModalOpen,
@@ -349,8 +451,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     openLogMealModal,
     closeLogMealModal,
     logRealMeal,
+    addInventoryItem,
+    removeInventoryItem,
     updateInventoryItemStatus,
     updateInventoryItemPriority,
+    updateInventoryItemDetails,
     resetAllFixtures,
     refreshTelemetry,
     clearRejectedList,

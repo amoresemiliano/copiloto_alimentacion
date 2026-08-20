@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { ContextCapture } from './ContextCapture';
 import { ActiveDecisionBanner } from './ActiveDecisionBanner';
 import { RecommendationCard } from './RecommendationCard';
-import { RotateCcw, PlusCircle, AlertCircle } from 'lucide-react';
+import { RotateCcw, PlusCircle, AlertCircle, Sparkles, X } from 'lucide-react';
 
 export const NowScreen: React.FC = () => {
   const {
@@ -13,6 +13,8 @@ export const NowScreen: React.FC = () => {
     clearRejectedList,
     openLogMealModal,
     context,
+    utilizationFilterIngredient,
+    setUtilizationFilterIngredient,
   } = useApp();
 
   return (
@@ -41,6 +43,30 @@ export const NowScreen: React.FC = () => {
           <span className="hidden sm:inline">Ya comí / </span>Registrar
         </button>
       </div>
+
+      {/* Utilization Focus Banner (if filtered from Mi Cocina) */}
+      {utilizationFilterIngredient && (
+        <div
+          id="utilization-focus-banner"
+          className="bg-[#FFF1EB] border border-[#FFD9CC] px-4 py-3 rounded-2xl flex items-center justify-between gap-3 text-xs shadow-2xs animate-fadeIn"
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#FF6321] shrink-0" />
+            <span className="text-[#1A1A1A]">
+              Priorizando platos que aprovechan: <strong>{utilizationFilterIngredient}</strong>
+            </span>
+          </div>
+
+          <button
+            id="btn-clear-utilization-filter"
+            onClick={() => setUtilizationFilterIngredient(null)}
+            className="text-xs font-bold text-[#FF6321] hover:text-[#D94E14] inline-flex items-center gap-1 cursor-pointer shrink-0"
+          >
+            <span>Ver todas</span>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Active Decision Banner (if user picked an option previously) */}
       <ActiveDecisionBanner />
@@ -87,20 +113,34 @@ export const NowScreen: React.FC = () => {
               <AlertCircle className="w-5 h-5" />
             </div>
             <h3 className="text-base font-semibold text-[#1A1A1A]">
-              No encontramos opciones con los filtros actuales
+              {utilizationFilterIngredient
+                ? `No encontramos recetas que usen ${utilizationFilterIngredient} con el contexto actual`
+                : 'No encontramos opciones con los filtros actuales'}
             </h3>
             <p className="text-xs text-[#666666] max-w-sm mx-auto leading-relaxed">
-              Podés ampliar el tiempo disponible, cambiar de prioridad o restaurar las opciones descartadas.
+              {utilizationFilterIngredient
+                ? 'Podés ampliar el tiempo disponible o volver a ver todas las propuestas.'
+                : 'Podés ampliar el tiempo disponible, cambiar de prioridad o restaurar las opciones descartadas.'}
             </p>
-            {rejectedRecipeIds.length > 0 && (
-              <button
-                onClick={clearRejectedList}
-                className="text-xs font-semibold bg-[#1A1A1A] text-white px-4 py-2 rounded-full hover:bg-black transition-colors inline-flex items-center gap-1.5"
-              >
-                <RotateCcw className="w-3 h-3 text-[#FF6321]" />
-                Restaurar opciones descartadas
-              </button>
-            )}
+            <div className="flex justify-center gap-2 pt-1 flex-wrap">
+              {utilizationFilterIngredient && (
+                <button
+                  onClick={() => setUtilizationFilterIngredient(null)}
+                  className="text-xs font-semibold bg-[#1A1A1A] text-white px-4 py-2 rounded-full hover:bg-black transition-colors"
+                >
+                  Ver todas las propuestas
+                </button>
+              )}
+              {rejectedRecipeIds.length > 0 && (
+                <button
+                  onClick={clearRejectedList}
+                  className="text-xs font-semibold bg-[#F5F5F5] text-[#1A1A1A] px-4 py-2 rounded-full hover:bg-[#E8E8E8] transition-colors inline-flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3 h-3 text-[#FF6321]" />
+                  Restaurar descartadas
+                </button>
+              )}
+            </div>
           </div>
         )}
       </section>

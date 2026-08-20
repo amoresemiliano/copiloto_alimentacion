@@ -197,6 +197,30 @@ export interface InventoryCheckResult {
   utilizationScore: number;
 }
 
+export function isItemAvailable(status?: string): boolean {
+  return status === 'tengo' || status === 'available';
+}
+
+export function isItemLow(status?: string): boolean {
+  return status === 'queda_poco' || status === 'low';
+}
+
+export function isItemUnknown(status?: string): boolean {
+  return status === 'desconocido' || status === 'unknown';
+}
+
+export function isItemUnavailable(status?: string): boolean {
+  return !status || status === 'no_tengo' || status === 'unavailable';
+}
+
+export function isItemPriority(priority?: string): boolean {
+  return priority === 'prioritario' || priority === 'priority';
+}
+
+export function isItemConsumeSoon(priority?: string): boolean {
+  return priority === 'consumir_pronto' || priority === 'consumeSoon' || priority === 'consume_soon';
+}
+
 export function evaluateInventoryAndUtilization(
   recipe: Recipe,
   inventory: InventoryItem[]
@@ -205,7 +229,7 @@ export function evaluateInventoryAndUtilization(
   inventory.forEach((item) => {
     inventoryMap.set(item.id, item);
     // Also index by normalized name for fuzzy resilience
-    inventoryMap.set(item.name.toLowerCase(), item);
+    inventoryMap.set(item.name.toLowerCase().trim(), item);
   });
 
   const coreIngredients = recipe.ingredients.filter((i) => i.isCore);
@@ -219,21 +243,24 @@ export function evaluateInventoryAndUtilization(
 
   for (const ing of coreIngredients) {
     const item = (ing.inventoryItemId && inventoryMap.get(ing.inventoryItemId)) ||
-                 inventoryMap.get(ing.name.toLowerCase());
+                 inventoryMap.get(ing.name.toLowerCase().trim());
 
-    if (!item || item.status === 'no_tengo') {
+    if (!item || isItemUnavailable(item.status)) {
       missingCore.push(ing.name);
-    } else if (item.status === 'tengo') {
+    } else if (isItemAvailable(item.status)) {
       availableCorePoints += 1.0;
-    } else if (item.status === 'queda_poco') {
+    } else if (isItemLow(item.status)) {
       availableCorePoints += 0.75;
+    } else if (isItemUnknown(item.status)) {
+      // Unknown items are not marked as definitely missing, but have moderate uncertainty
+      availableCorePoints += 0.45;
     }
 
-    if (item && item.status !== 'no_tengo') {
-      if (item.priority === 'prioritario') {
+    if (item && !isItemUnavailable(item.status)) {
+      if (isItemPriority(item.priority)) {
         priorityUsed.push(item.name);
         utilizationPoints += 1.0;
-      } else if (item.priority === 'consumir_pronto') {
+      } else if (isItemConsumeSoon(item.priority)) {
         priorityUsed.push(item.name);
         utilizationPoints += 0.65;
       }
@@ -242,14 +269,21 @@ export function evaluateInventoryAndUtilization(
 
   for (const ing of optionalIngredients) {
     const item = (ing.inventoryItemId && inventoryMap.get(ing.inventoryItemId)) ||
-                 inventoryMap.get(ing.name.toLowerCase());
+                 inventoryMap.get(ing.name.toLowerCase().trim());
 
-    if (item && item.status !== 'no_tengo') {
-      availableOptionalPoints += item.status === 'tengo' ? 1.0 : 0.75;
-      if (item.priority === 'prioritario') {
+    if (item && !isItemUnavailable(item.status)) {
+      if (isItemAvailable(item.status)) {
+        availableOptionalPoints += 1.0;
+      } else if (isItemLow(item.status)) {
+        availableOptionalPoints += 0.75;
+      } else if (isItemUnknown(item.status)) {
+        availableOptionalPoints += 0.45;
+      }
+
+      if (isItemPriority(item.priority)) {
         priorityUsed.push(item.name);
         utilizationPoints += 0.75;
-      } else if (item.priority === 'consumir_pronto') {
+      } else if (isItemConsumeSoon(item.priority)) {
         priorityUsed.push(item.name);
         utilizationPoints += 0.5;
       }
@@ -270,8 +304,10 @@ export function evaluateInventoryAndUtilization(
     inventoryScore = Math.max(0.05, inventoryScore * Math.pow(0.4, missingCore.length));
   }
 
-  // Utilization normalized score (0 to 1)
-  const utilizationScore = Math.min(1.0, Math.max(0.1, utilizationPoints * 0.5));
+  // Utilization normalized score (0.05 when no priority items, up to 1.0 when priority items present)
+  const utilizationScore = utilizationPoints > 0
+    ? Math.min(1.0, Math.max(0.2, utilizationPoints * 0.5))
+    : 0.05;
 
   return {
     score: inventoryScore,
@@ -338,8 +374,8 @@ export function deriveExplanationsAndPenalties(
   const positiveReasons: string[] = [];
   const penalties: string[] = [];
 
-  // Priority Ingredients Utilization
-  if (priorityUsed.length > 0) {
+  // Priority Ingredients Utilization (only if factor contributed positively)
+  if (priorityUsed.length > 0 && factors.utilizationFit > 0.1) {
     if (priorityUsed.length === 1) {
       positiveReasons.push(`Aprovecha ${priorityUsed[0]} que conviene utilizar pronto.`);
     } else {

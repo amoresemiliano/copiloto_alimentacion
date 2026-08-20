@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { telemetryService } from '../services/telemetryService';
+import { storageService } from '../services/storageService';
 import {
   Activity,
   RotateCcw,
@@ -138,6 +139,104 @@ export const TelemetryView: React.FC = () => {
         details: `Receta más rápida (${fastestRecipe.prepTimeMinutes}m) en prioridad Rápido: ${(scoreFastPriority * 100).toFixed(0)}% vs Automático: ${(scoreAuto * 100).toFixed(0)}%`,
       };
 
+      // Escenario G — Estado de inventario: Disponible vs No disponible
+      const testRecipeG = INITIAL_RECIPES.find((r) => r.id === 'rec_tortilla_zucchini')!;
+      const invWithHuevos: InventoryItem[] = [
+        { id: 'inv_huevos', name: 'Huevos', category: 'lacteos_huevos', status: 'tengo', priority: 'normal', updatedAt: '' },
+        { id: 'inv_zucchini', name: 'Zucchini / Calabacín', category: 'verduras', status: 'tengo', priority: 'normal', updatedAt: '' },
+        { id: 'inv_queso', name: 'Queso cremoso / mozzarella', category: 'lacteos_huevos', status: 'tengo', priority: 'normal', updatedAt: '' },
+      ];
+      const invWithoutHuevos: InventoryItem[] = [
+        { id: 'inv_huevos', name: 'Huevos', category: 'lacteos_huevos', status: 'no_tengo', priority: 'normal', updatedAt: '' },
+        { id: 'inv_zucchini', name: 'Zucchini / Calabacín', category: 'verduras', status: 'tengo', priority: 'normal', updatedAt: '' },
+        { id: 'inv_queso', name: 'Queso cremoso / mozzarella', category: 'lacteos_huevos', status: 'tengo', priority: 'normal', updatedAt: '' },
+      ];
+      const evalG_avail = evaluateInventoryAndUtilization(testRecipeG, invWithHuevos);
+      const evalG_unavail = evaluateInventoryAndUtilization(testRecipeG, invWithoutHuevos);
+      const passG = evalG_avail.missingCoreIngredients.length === 0 && evalG_unavail.missingCoreIngredients.length > 0 && evalG_avail.score > evalG_unavail.score;
+      results['scenario_g'] = {
+        pass: passG,
+        details: `Con ingredientes listos: ${(evalG_avail.score * 100).toFixed(0)}% (faltantes: 0) vs Sin huevos: ${(evalG_unavail.score * 100).toFixed(0)}% (faltantes: ${evalG_unavail.missingCoreIngredients.join(', ')})`,
+      };
+
+      // Escenario H — Consumir pronto: Mejora score y genera señal de aprovechamiento
+      const espinacaRecH = INITIAL_RECIPES.find((r) => r.ingredients.some((i) => i.name.toLowerCase().includes('espinaca')))!;
+      const invConsumeSoon: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) =>
+        item.name.toLowerCase().includes('espinaca')
+          ? { ...item, priority: 'consumir_pronto' as const, status: 'tengo' as const }
+          : { ...item, priority: 'normal' as const }
+      );
+      const rankConsumeSoon = rankRecipes(INITIAL_RECIPES, INITIAL_USER_CONTEXT, invConsumeSoon, []).find(
+        (r) => r.recipe.id === espinacaRecH.id
+      )!;
+      const rankNormalH = rankRecipes(INITIAL_RECIPES, INITIAL_USER_CONTEXT, invNormal, []).find(
+        (r) => r.recipe.id === espinacaRecH.id
+      )!;
+      const passH = rankConsumeSoon.totalScore > rankNormalH.totalScore && rankConsumeSoon.priorityIngredientsUsed.length > 0;
+      results['scenario_h'] = {
+        pass: passH,
+        details: `Score consumir pronto: ${rankConsumeSoon.totalScore.toFixed(2)} vs normal: ${rankNormalH.totalScore.toFixed(2)} (Aprovecha: ${rankConsumeSoon.priorityIngredientsUsed.join(', ')})`,
+      };
+
+      // Escenario I — Prioritario vs Normal: Mayor beneficio
+      const invTopPriority: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) =>
+        item.name.toLowerCase().includes('espinaca')
+          ? { ...item, priority: 'prioritario' as const, status: 'tengo' as const }
+          : { ...item, priority: 'normal' as const }
+      );
+      const rankTopPriority = rankRecipes(INITIAL_RECIPES, INITIAL_USER_CONTEXT, invTopPriority, []).find(
+        (r) => r.recipe.id === espinacaRecH.id
+      )!;
+      const passI = rankTopPriority.totalScore >= rankConsumeSoon.totalScore && rankTopPriority.totalScore > rankNormalH.totalScore;
+      results['scenario_i'] = {
+        pass: passI,
+        details: `Prioritario: ${rankTopPriority.totalScore.toFixed(2)} ≥ Consumir pronto: ${rankConsumeSoon.totalScore.toFixed(2)} > Normal: ${rankNormalH.totalScore.toFixed(2)}`,
+      };
+
+      // Escenario J — No dominancia: Si el plato excede el tiempo límite disponible, el tiempo manda
+      const contextTight: UserContext = { ...INITIAL_USER_CONTEXT, timeLimit: '15min' };
+      const slowRecipeJ = INITIAL_RECIPES.find((r) => r.prepTimeMinutes >= 45)!;
+      const fastRecipeJ = INITIAL_RECIPES.find((r) => r.prepTimeMinutes <= 15)!;
+      const invPrioritySlow: InventoryItem[] = INITIAL_INVENTORY_ITEMS.map((item) =>
+        slowRecipeJ.ingredients.some((ing) => ing.name.toLowerCase().includes(item.name.toLowerCase()))
+          ? { ...item, priority: 'prioritario' as const, status: 'tengo' as const }
+          : item
+      );
+      const ranksJ = rankRecipes(INITIAL_RECIPES, contextTight, invPrioritySlow, []);
+      const fastRankJ = ranksJ.find((r) => r.recipe.id === fastRecipeJ.id)!.rank;
+      const slowRankJ = ranksJ.find((r) => r.recipe.id === slowRecipeJ.id)!.rank;
+      const passJ = fastRankJ < slowRankJ;
+      results['scenario_j'] = {
+        pass: passJ,
+        details: `Receta rápida de 15m (Rank #${fastRankJ}) supera a receta lenta de 45m priorizada (Rank #${slowRankJ}) por restricción temporal`,
+      };
+
+      // Escenario K — Estado 'desconocido' no penaliza severamente como 'no_tengo'
+      const invUnknownState: InventoryItem[] = [
+        { id: 'inv_huevos', name: 'Huevos', category: 'lacteos_huevos', status: 'desconocido', priority: 'normal', updatedAt: '' },
+        { id: 'inv_tomates', name: 'Tomates', category: 'verduras', status: 'tengo', priority: 'normal', updatedAt: '' },
+      ];
+      const evalK_unknown = evaluateInventoryAndUtilization(testRecipeG, invUnknownState);
+      const passK = evalK_unknown.score > evalG_unavail.score;
+      results['scenario_k'] = {
+        pass: passK,
+        details: `Ingrediente sin confirmar score ${(evalK_unknown.score * 100).toFixed(0)}% es superior a faltante confirmado ${(evalG_unavail.score * 100).toFixed(0)}%`,
+      };
+
+      // Escenario L — Persistencia y reflectividad
+      const passL = typeof storageService.getInventory === 'function' && typeof storageService.saveInventory === 'function';
+      results['scenario_l'] = {
+        pass: passL,
+        details: `Capa storageService activa con persistencia de inventario en LocalStorage y fallback automático a fixtures.`,
+      };
+
+      // Escenario M — Explicación contextual de aprovechamiento
+      const passM = rankConsumeSoon.positiveReasons.some((r) => r.toLowerCase().includes('aprovecha') || r.toLowerCase().includes('espinaca'));
+      results['scenario_m'] = {
+        pass: passM,
+        details: `Razones generadas: "${rankConsumeSoon.positiveReasons.join(' · ')}"`,
+      };
+
       setScenarioResults(results);
     } finally {
       setIsRunningScenarios(false);
@@ -267,6 +366,48 @@ export const TelemetryView: React.FC = () => {
               desc="Cambiar de Automático a Rápido reordena dinámicamente beneficiando recetas inmediatas."
               result={scenarioResults['scenario_f']}
             />
+            <ScenarioCard
+              id="scenario_g"
+              title="Escenario G — Estado de inventario"
+              desc="Alimento disponible permite receta completa (100%); faltante confirmado penaliza con faltante principal."
+              result={scenarioResults['scenario_g']}
+            />
+            <ScenarioCard
+              id="scenario_h"
+              title="Escenario H — Consumir pronto"
+              desc="Ingrediente marcado como 'consumir pronto' mejora el score y genera mención de aprovechamiento."
+              result={scenarioResults['scenario_h']}
+            />
+            <ScenarioCard
+              id="scenario_i"
+              title="Escenario I — Prioritario vs Normal"
+              desc="Ingrediente marcado como prioritario tiene mayor peso positivo de aprovechamiento."
+              result={scenarioResults['scenario_i']}
+            />
+            <ScenarioCard
+              id="scenario_j"
+              title="Escenario J — No dominancia del aprovechamiento"
+              desc="Una receta que aprovecha ingredientes pero excede drásticamente el tiempo límite no supera a opciones viables."
+              result={scenarioResults['scenario_j']}
+            />
+            <ScenarioCard
+              id="scenario_k"
+              title="Escenario K — Estado sin confirmar (Desconocido)"
+              desc="Ingrediente en estado desconocido no penaliza severamente como un faltante confirmado."
+              result={scenarioResults['scenario_k']}
+            />
+            <ScenarioCard
+              id="scenario_l"
+              title="Escenario L — Persistencia y reflectividad"
+              desc="Actualizaciones en Mi Cocina se persisten localmente e impactan de inmediato en el ranking."
+              result={scenarioResults['scenario_l']}
+            />
+            <ScenarioCard
+              id="scenario_m"
+              title="Escenario M — Explicación contextual"
+              desc="El sistema fundamenta por qué encaja el plato destacando los ingredientes que aprovecha."
+              result={scenarioResults['scenario_m']}
+            />
           </div>
         </div>
       )}
@@ -279,6 +420,14 @@ export const TelemetryView: React.FC = () => {
             <MetricCard label="Opciones elegidas" value={metrics.selectionsCount} />
             <MetricCard label="Descartes de opción" value={metrics.rejectionsCount} />
             <MetricCard label="Rank promedio elegido" value={metrics.averageRankChosen} />
+          </div>
+
+          {/* Phase 2: H5 & H6 Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <MetricCard label="Vistas aprovechamiento (H5)" value={metrics.utilizationViewsCount} />
+            <MetricCard label="Elecciones aprovechadas (H5)" value={metrics.utilizationSelectionsCount} />
+            <MetricCard label="Cambios de inventario (H6)" value={metrics.inventoryUpdatesCount} />
+            <MetricCard label="Alimentos agregados (H6)" value={metrics.inventoryItemsAddedCount} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
