@@ -73,6 +73,8 @@ export interface RecipeIngredient {
   name: string;
   inventoryItemId?: string;
   quantityDemo?: string;
+  quantityNumeric?: number;
+  unit?: string;
   isCore: boolean;
   optional?: boolean;
 }
@@ -133,6 +135,8 @@ export interface MealEvent {
   recipeName?: string;
   customText?: string;
   wasSuggested: boolean;
+  wasPlanned?: boolean;
+  plannedMealId?: string;
   contextSnapshot?: Partial<UserContext>;
   reasonsSnapshot?: string[];
 }
@@ -143,6 +147,79 @@ export interface RejectionFeedback {
   reason: 'mucho_tiempo' | 'no_tengo_ganas' | 'no_me_apetece' | 'falta_ingrediente' | 'otro';
   notes?: string;
   timestamp: string;
+}
+
+// ----------------------------------------------------
+// FASE 3: Planificación + Compras Inteligentes
+// ----------------------------------------------------
+
+export type PlannedMealStatus = 'planned' | 'completed' | 'skipped' | 'replaced';
+export type PlannedMealSource = 'manual' | 'recommendation_save' | 'suggestion';
+export type PlanDay = 'hoy' | 'manana' | 'proximos_dias';
+
+export interface PlannedMeal {
+  id: string;
+  day: PlanDay;
+  dateLabel?: string;
+  mealMoment: MealMoment;
+  recipeId?: string;
+  recipeName: string;
+  servings: number;
+  status: PlannedMealStatus;
+  source: PlannedMealSource;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NeedSuggestedAction = 'comprar' | 'probablemente_comprar' | 'revisar_en_casa' | 'cubierto';
+
+export interface ShoppingNeed {
+  id: string;
+  ingredientName: string;
+  inventoryItemId?: string;
+  totalRequiredQuantity?: number;
+  unit?: string;
+  formattedRequired?: string;
+  inventoryStatus: IngredientAvailability;
+  inventoryQuantity?: number;
+  inventoryQuantityRaw?: string;
+  inventoryPriority?: IngredientPriority;
+  suggestedAction: NeedSuggestedAction;
+  reason: string;
+  plannedMealIds: string[];
+  plannedMealTitles: string[];
+  suggestedQuantity?: number;
+  suggestedQuantityText?: string;
+}
+
+export type ShoppingItemOrigin = 'suggested' | 'manual';
+export type ShoppingItemStatus = 'pending' | 'marked_have' | 'purchased';
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  category?: InventoryItem['category'];
+  suggestedQuantity?: number;
+  finalPlannedQuantity?: number;
+  purchasedQuantity?: number;
+  unit?: string;
+  quantityText?: string;
+  reason: string;
+  origin: ShoppingItemOrigin;
+  status: ShoppingItemStatus;
+  needLevel?: NeedSuggestedAction;
+  inventoryItemId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseEvent {
+  id: string;
+  timestamp: string;
+  items: ShoppingItem[];
+  appliedChangesSummary: string[];
+  source: 'shopping_purchase';
 }
 
 export type TelemetryEventName =
@@ -164,7 +241,21 @@ export type TelemetryEventName =
   | 'utilization_recommendations_viewed'
   | 'utilization_recipe_selected'
   | 'telemetry_inspected'
-  | 'fixtures_reset';
+  | 'fixtures_reset'
+  // Phase 3 events
+  | 'planned_meal_added'
+  | 'planned_meal_removed'
+  | 'planned_meal_replaced'
+  | 'servings_changed'
+  | 'shopping_list_generated'
+  | 'shopping_item_added'
+  | 'shopping_item_removed'
+  | 'shopping_quantity_changed'
+  | 'shopping_item_marked_have'
+  | 'shopping_item_purchased'
+  | 'shopping_session_started'
+  | 'shopping_completed'
+  | 'purchase_applied_to_inventory';
 
 export interface TelemetryEvent {
   id: string;

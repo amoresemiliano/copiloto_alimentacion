@@ -7,11 +7,32 @@ import {
   Recommendation,
   RejectionFeedback,
   TelemetryEvent,
+  PlannedMeal,
+  ShoppingItem,
+  ShoppingNeed,
+  PurchaseEvent,
+  PlanDay,
+  MealMoment,
+  ShoppingItemStatus,
 } from '../types/domain';
 import { storageService } from '../services/storageService';
 import { telemetryService } from '../services/telemetryService';
 import { rankRecipes } from '../services/rankingEngine';
-import { INITIAL_INVENTORY_ITEMS, INITIAL_RECIPES, INITIAL_RECENT_MEALS, INITIAL_USER_CONTEXT } from '../data/fixtures';
+import { calculateShoppingNeeds } from '../services/shoppingNeedsService';
+import { shoppingService } from '../services/shoppingService';
+import { inventoryMergeService, InventoryMergeResult } from '../services/inventoryMergeService';
+import { planningService } from '../services/planningService';
+import {
+  INITIAL_INVENTORY_ITEMS,
+  INITIAL_RECIPES,
+  INITIAL_RECENT_MEALS,
+  INITIAL_USER_CONTEXT,
+  INITIAL_PLANNED_MEALS,
+  INITIAL_SHOPPING_ITEMS,
+  INITIAL_PURCHASE_HISTORY,
+} from '../data/fixtures';
+
+export type AppTab = 'ahora' | 'plan' | 'compras' | 'cocina' | 'historial' | 'mas';
 
 interface AppContextType {
   // Core state
@@ -23,7 +44,7 @@ interface AppContextType {
   allRankedRecommendations: Recommendation[];
   activeChosenRecommendation: Recommendation | null;
   rejectedRecipeIds: string[];
-  currentTab: 'ahora' | 'cocina' | 'historial' | 'mas';
+  currentTab: AppTab;
   telemetryEvents: TelemetryEvent[];
   
   // Phase 2: Utilization focus
@@ -31,14 +52,24 @@ interface AppContextType {
   setUtilizationFilterIngredient: (ingredientName: string | null) => void;
   focusUtilizationIngredient: (ingredientName: string) => void;
 
+  // Phase 3: Planning & Shopping State
+  plannedMeals: PlannedMeal[];
+  shoppingItems: ShoppingItem[];
+  shoppingNeeds: ShoppingNeed[];
+  purchaseHistory: PurchaseEvent[];
+  isShoppingActiveMode: boolean;
+  setIsShoppingActiveMode: (active: boolean) => void;
+
   // UI & modal state
   detailRecommendation: Recommendation | null;
   rejectionTargetRecommendation: Recommendation | null;
   isLogMealModalOpen: boolean;
-  logMealPrefill: { recipe?: Recipe; suggested: boolean } | null;
+  logMealPrefill: { recipe?: Recipe; suggested: boolean; plannedMealId?: string } | null;
+  planMealPrefillRecipe: Recipe | null;
+  isPlanMealModalOpen: boolean;
 
   // Actions
-  setTab: (tab: 'ahora' | 'cocina' | 'historial' | 'mas') => void;
+  setTab: (tab: AppTab) => void;
   updateContext: (partial: Partial<UserContext>) => void;
   selectRecommendation: (rec: Recommendation) => void;
   clearChosenRecommendation: () => void;
@@ -47,7 +78,7 @@ interface AppContextType {
   openRejectionModal: (rec: Recommendation) => void;
   closeRejectionModal: () => void;
   confirmRejection: (feedback: Omit<RejectionFeedback, 'timestamp'>) => void;
-  openLogMealModal: (prefill?: { recipe?: Recipe; suggested: boolean }) => void;
+  openLogMealModal: (prefill?: { recipe?: Recipe; suggested: boolean; plannedMealId?: string }) => void;
   closeLogMealModal: () => void;
   logRealMeal: (params: {
     mealMoment: UserContext['moment'];
@@ -55,6 +86,7 @@ interface AppContextType {
     recipeName?: string;
     customText?: string;
     wasSuggested: boolean;
+    plannedMealId?: string;
   }) => void;
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'updatedAt'>) => void;
   removeInventoryItem: (id: string) => void;
@@ -64,6 +96,33 @@ interface AppContextType {
   resetAllFixtures: () => void;
   refreshTelemetry: () => void;
   clearRejectedList: () => void;
+
+  // Phase 3 Planning actions
+  addPlannedMeal: (params: {
+    day: PlanDay;
+    mealMoment: MealMoment;
+    recipe?: Recipe;
+    recipeName?: string;
+    servings?: number;
+    notes?: string;
+  }) => void;
+  removePlannedMeal: (id: string) => void;
+  updatePlannedMealServings: (id: string, servings: number) => void;
+  replacePlannedMealRecipe: (id: string, newRecipe: Recipe) => void;
+  openPlanMealModal: (recipe?: Recipe) => void;
+  closePlanMealModal: () => void;
+
+  // Phase 3 Shopping actions
+  addManualShoppingItem: (params: {
+    name: string;
+    quantityText?: string;
+    category?: InventoryItem['category'];
+  }) => void;
+  removeShoppingItem: (id: string) => void;
+  updateShoppingItemStatus: (id: string, status: ShoppingItemStatus) => void;
+  updateShoppingItemQuantity: (id: string, quantityText: string, numeric?: number) => void;
+  syncShoppingList: () => void;
+  finalizePurchase: () => InventoryMergeResult;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -75,14 +134,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [recipes] = useState<Recipe[]>(() => storageService.getRecipes());
   const [rejectedRecipeIds, setRejectedRecipeIds] = useState<string[]>(() => storageService.getRejectedRecipeIds());
   const [chosenRecipeId, setChosenRecipeId] = useState<string | null>(() => storageService.getChosenRecipeId());
-  const [currentTab, setCurrentTab] = useState<'ahora' | 'cocina' | 'historial' | 'mas'>('ahora');
+  const [currentTab, setCurrentTab] = useState<AppTab>('ahora');
   const [utilizationFilterIngredient, setUtilizationFilterIngredient] = useState<string | null>(null);
+
+  // Phase 3 State
+  const [plannedMeals, setPlannedMeals] = useState<PlannedMeal[]>(() => storageService.getPlannedMeals());
+  const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>(() => storageService.getShoppingItems());
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseEvent[]>(() => storageService.getPurchaseHistory());
+  const [isShoppingActiveMode, setIsShoppingActiveMode] = useState<boolean>(false);
 
   // Modals
   const [detailRecommendation, setDetailRecommendation] = useState<Recommendation | null>(null);
   const [rejectionTargetRecommendation, setRejectionTargetRecommendation] = useState<Recommendation | null>(null);
   const [isLogMealModalOpen, setIsLogMealModalOpen] = useState(false);
-  const [logMealPrefill, setLogMealPrefill] = useState<{ recipe?: Recipe; suggested: boolean } | null>(null);
+  const [logMealPrefill, setLogMealPrefill] = useState<{ recipe?: Recipe; suggested: boolean; plannedMealId?: string } | null>(null);
+  const [isPlanMealModalOpen, setIsPlanMealModalOpen] = useState(false);
+  const [planMealPrefillRecipe, setPlanMealPrefillRecipe] = useState<Recipe | null>(null);
+
   const [telemetryEvents, setTelemetryEvents] = useState<TelemetryEvent[]>(() => telemetryService.getEvents());
 
   // Track session start once
@@ -115,6 +183,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return allRankedRecommendations.slice(0, 4);
   }, [allRankedRecommendations, utilizationFilterIngredient]);
+
+  // Compute ingredient needs deterministically from active planned meals and inventory
+  const shoppingNeeds = useMemo(() => {
+    return calculateShoppingNeeds(plannedMeals, recipes, inventory);
+  }, [plannedMeals, recipes, inventory]);
+
+  // Automatically synchronize shopping list with current needs whenever needs or inventory change
+  useEffect(() => {
+    setShoppingItems((prevList) => {
+      const synced = shoppingService.generateShoppingListFromNeeds(shoppingNeeds, prevList, inventory);
+      storageService.saveShoppingItems(synced);
+      return synced;
+    });
+  }, [shoppingNeeds, inventory]);
 
   // Track recommendation generation
   useEffect(() => {
@@ -198,7 +280,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setChosenRecipeId(rec.recipe.id);
     storageService.saveChosenRecipeId(rec.recipe.id);
 
-    // If recipe was chosen from a utilization focus or uses priority ingredients, track utilization_recipe_selected
     if (utilizationFilterIngredient || rec.priorityIngredientsUsed.length > 0) {
       telemetryService.track('utilization_recipe_selected', {
         recipeId: rec.recipe.id,
@@ -276,8 +357,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     storageService.saveRejectedRecipeIds([]);
   }, []);
 
-  const openLogMealModal = useCallback((prefill?: { recipe?: Recipe; suggested: boolean }) => {
-    setLogMealPrefill(prefill || (activeChosenRecommendation ? { recipe: activeChosenRecommendation.recipe, suggested: true } : null));
+  const openLogMealModal = useCallback((prefill?: { recipe?: Recipe; suggested: boolean; plannedMealId?: string }) => {
+    setLogMealPrefill(
+      prefill ||
+        (activeChosenRecommendation ? { recipe: activeChosenRecommendation.recipe, suggested: true } : null)
+    );
     setIsLogMealModalOpen(true);
   }, [activeChosenRecommendation]);
 
@@ -292,6 +376,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     recipeName?: string;
     customText?: string;
     wasSuggested: boolean;
+    plannedMealId?: string;
   }) => {
     const newMeal: MealEvent = {
       id: `meal_${Date.now()}`,
@@ -301,6 +386,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       recipeName: params.recipeName,
       customText: params.customText,
       wasSuggested: params.wasSuggested,
+      wasPlanned: !!params.plannedMealId,
+      plannedMealId: params.plannedMealId,
       contextSnapshot: {
         moment: params.mealMoment,
         hunger: context.hunger,
@@ -313,6 +400,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nextMeals = [newMeal, ...recentMeals];
     setRecentMeals(nextMeals);
     storageService.saveRecentMeals(nextMeals);
+
+    // If a planned meal was completed, link it and update status
+    if (params.plannedMealId) {
+      setPlannedMeals((prev) => {
+        const next = planningService.markCompleted(params.plannedMealId!, prev);
+        storageService.savePlannedMeals(next);
+        return next;
+      });
+    }
 
     // Clear active selection since it has been consumed
     setChosenRecipeId(null);
@@ -327,6 +423,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       recipeName: newMeal.recipeName,
       customText: newMeal.customText,
       wasSuggested: newMeal.wasSuggested,
+      wasPlanned: newMeal.wasPlanned,
+      plannedMealId: newMeal.plannedMealId,
     });
     setTelemetryEvents(telemetryService.getEvents());
   }, [context, recentMeals]);
@@ -404,14 +502,245 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, []);
 
+  // ----------------------------------------------------
+  // Phase 3: Planning Actions
+  // ----------------------------------------------------
+
+  const addPlannedMeal = useCallback((params: {
+    day: PlanDay;
+    mealMoment: MealMoment;
+    recipe?: Recipe;
+    recipeName?: string;
+    servings?: number;
+    notes?: string;
+  }) => {
+    const newPlanned = planningService.createPlannedMeal(params);
+    setPlannedMeals((prev) => {
+      const next = [...prev, newPlanned];
+      storageService.savePlannedMeals(next);
+      return next;
+    });
+    telemetryService.track('planned_meal_added', {
+      id: newPlanned.id,
+      day: newPlanned.day,
+      mealMoment: newPlanned.mealMoment,
+      recipeId: newPlanned.recipeId,
+      recipeName: newPlanned.recipeName,
+      servings: newPlanned.servings,
+      source: newPlanned.source,
+    });
+    setTelemetryEvents(telemetryService.getEvents());
+  }, []);
+
+  const removePlannedMeal = useCallback((id: string) => {
+    setPlannedMeals((prev) => {
+      const target = prev.find((m) => m.id === id);
+      const next = planningService.removePlannedMeal(id, prev);
+      storageService.savePlannedMeals(next);
+      telemetryService.track('planned_meal_removed', {
+        id,
+        recipeName: target?.recipeName,
+      });
+      setTelemetryEvents(telemetryService.getEvents());
+      return next;
+    });
+  }, []);
+
+  const updatePlannedMealServings = useCallback((id: string, servings: number) => {
+    setPlannedMeals((prev) => {
+      const next = planningService.updateServings(id, servings, prev);
+      storageService.savePlannedMeals(next);
+      telemetryService.track('servings_changed', {
+        id,
+        servings,
+      });
+      setTelemetryEvents(telemetryService.getEvents());
+      return next;
+    });
+  }, []);
+
+  const replacePlannedMealRecipe = useCallback((id: string, newRecipe: Recipe) => {
+    setPlannedMeals((prev) => {
+      const next = planningService.replaceRecipe(id, newRecipe, prev);
+      storageService.savePlannedMeals(next);
+      telemetryService.track('planned_meal_replaced', {
+        id,
+        newRecipeId: newRecipe.id,
+        newRecipeName: newRecipe.name,
+      });
+      setTelemetryEvents(telemetryService.getEvents());
+      return next;
+    });
+  }, []);
+
+  const openPlanMealModal = useCallback((recipe?: Recipe) => {
+    setPlanMealPrefillRecipe(recipe || null);
+    setIsPlanMealModalOpen(true);
+  }, []);
+
+  const closePlanMealModal = useCallback(() => {
+    setIsPlanMealModalOpen(false);
+    setPlanMealPrefillRecipe(null);
+  }, []);
+
+  // ----------------------------------------------------
+  // Phase 3: Shopping Actions
+  // ----------------------------------------------------
+
+  const addManualShoppingItem = useCallback((params: {
+    name: string;
+    quantityText?: string;
+    category?: InventoryItem['category'];
+  }) => {
+    const newItem = shoppingService.createManualItem(params);
+    setShoppingItems((prev) => {
+      const next = [newItem, ...prev];
+      storageService.saveShoppingItems(next);
+      return next;
+    });
+    telemetryService.track('shopping_item_added', {
+      id: newItem.id,
+      name: newItem.name,
+      quantityText: newItem.quantityText,
+      origin: 'manual',
+    });
+    setTelemetryEvents(telemetryService.getEvents());
+  }, []);
+
+  const removeShoppingItem = useCallback((id: string) => {
+    setShoppingItems((prev) => {
+      const target = prev.find((i) => i.id === id);
+      const next = prev.filter((i) => i.id !== id);
+      storageService.saveShoppingItems(next);
+      telemetryService.track('shopping_item_removed', {
+        id,
+        name: target?.name,
+        origin: target?.origin,
+      });
+      setTelemetryEvents(telemetryService.getEvents());
+      return next;
+    });
+  }, []);
+
+  const updateShoppingItemStatus = useCallback((id: string, status: ShoppingItemStatus) => {
+    setShoppingItems((prev) => {
+      const target = prev.find((i) => i.id === id);
+      const next = prev.map((item) =>
+        item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item
+      );
+      storageService.saveShoppingItems(next);
+
+      if (status === 'purchased') {
+        telemetryService.track('shopping_item_purchased', {
+          id,
+          name: target?.name,
+          suggestedQuantity: target?.suggestedQuantity,
+          finalPlannedQuantity: target?.finalPlannedQuantity,
+        });
+      } else if (status === 'marked_have') {
+        telemetryService.track('shopping_item_marked_have', {
+          id,
+          name: target?.name,
+        });
+      }
+      setTelemetryEvents(telemetryService.getEvents());
+      return next;
+    });
+  }, []);
+
+  const updateShoppingItemQuantity = useCallback((id: string, quantityText: string, numeric?: number) => {
+    setShoppingItems((prev) => {
+      const target = prev.find((i) => i.id === id);
+      const next = prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              quantityText,
+              finalPlannedQuantity: numeric !== undefined ? numeric : item.finalPlannedQuantity,
+              updatedAt: new Date().toISOString(),
+            }
+          : item
+      );
+      storageService.saveShoppingItems(next);
+      telemetryService.track('shopping_quantity_changed', {
+        id,
+        name: target?.name,
+        oldQuantity: target?.quantityText,
+        newQuantity: quantityText,
+        suggestedQuantity: target?.suggestedQuantity,
+        finalPlannedQuantity: numeric,
+      });
+      setTelemetryEvents(telemetryService.getEvents());
+      return next;
+    });
+  }, []);
+
+  const syncShoppingList = useCallback(() => {
+    setShoppingItems((prevList) => {
+      const synced = shoppingService.generateShoppingListFromNeeds(shoppingNeeds, prevList, inventory);
+      storageService.saveShoppingItems(synced);
+      telemetryService.track('shopping_list_generated', {
+        needsCount: shoppingNeeds.length,
+        itemsCount: synced.length,
+      });
+      setTelemetryEvents(telemetryService.getEvents());
+      return synced;
+    });
+  }, [shoppingNeeds, inventory]);
+
+  const finalizePurchase = useCallback((): InventoryMergeResult => {
+    const result = inventoryMergeService.applyPurchaseToInventory(shoppingItems, inventory);
+    
+    // Save updated inventory
+    setInventory(result.updatedInventory);
+    storageService.saveInventory(result.updatedInventory);
+
+    // Record purchase event in history
+    const purchasedOnly = shoppingItems.filter((i) => i.status === 'purchased' || i.status === 'marked_have');
+    if (purchasedOnly.length > 0) {
+      const purchaseEvent: PurchaseEvent = {
+        id: `purch_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        items: purchasedOnly,
+        appliedChangesSummary: result.appliedSummary,
+        source: 'shopping_purchase',
+      };
+      const nextHistory = [purchaseEvent, ...purchaseHistory];
+      setPurchaseHistory(nextHistory);
+      storageService.savePurchaseHistory(nextHistory);
+    }
+
+    // Remove purchased items from active shopping list (keep pending)
+    const remainingPending = shoppingItems.filter((i) => i.status === 'pending');
+    setShoppingItems(remainingPending);
+    storageService.saveShoppingItems(remainingPending);
+
+    // Track telemetry
+    telemetryService.track('shopping_completed', {
+      itemsPurchasedCount: result.itemsAppliedCount,
+      summary: result.appliedSummary,
+    });
+    telemetryService.track('purchase_applied_to_inventory', {
+      itemsAppliedCount: result.itemsAppliedCount,
+      updatedInventoryCount: result.updatedInventory.length,
+    });
+    setTelemetryEvents(telemetryService.getEvents());
+
+    return result;
+  }, [shoppingItems, inventory, purchaseHistory]);
+
   const resetAllFixtures = useCallback(() => {
     storageService.resetAllToFixtures();
     setContext({ ...INITIAL_USER_CONTEXT });
     setInventory([...INITIAL_INVENTORY_ITEMS]);
     setRecentMeals([...INITIAL_RECENT_MEALS]);
+    setPlannedMeals([...INITIAL_PLANNED_MEALS]);
+    setShoppingItems([...INITIAL_SHOPPING_ITEMS]);
+    setPurchaseHistory([...INITIAL_PURCHASE_HISTORY]);
     setRejectedRecipeIds([]);
     setChosenRecipeId(null);
     setUtilizationFilterIngredient(null);
+    setIsShoppingActiveMode(false);
     telemetryService.track('fixtures_reset', {});
     setTelemetryEvents(telemetryService.getEvents());
   }, []);
@@ -434,10 +763,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     utilizationFilterIngredient,
     setUtilizationFilterIngredient,
     focusUtilizationIngredient,
+    plannedMeals,
+    shoppingItems,
+    shoppingNeeds,
+    purchaseHistory,
+    isShoppingActiveMode,
+    setIsShoppingActiveMode,
     detailRecommendation,
     rejectionTargetRecommendation,
     isLogMealModalOpen,
     logMealPrefill,
+    isPlanMealModalOpen,
+    planMealPrefillRecipe,
 
     setTab: setCurrentTab,
     updateContext,
@@ -459,6 +796,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     resetAllFixtures,
     refreshTelemetry,
     clearRejectedList,
+
+    // Phase 3 Actions
+    addPlannedMeal,
+    removePlannedMeal,
+    updatePlannedMealServings,
+    replacePlannedMealRecipe,
+    openPlanMealModal,
+    closePlanMealModal,
+    addManualShoppingItem,
+    removeShoppingItem,
+    updateShoppingItemStatus,
+    updateShoppingItemQuantity,
+    syncShoppingList,
+    finalizePurchase,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

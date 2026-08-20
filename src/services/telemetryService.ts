@@ -112,6 +112,14 @@ class TelemetryService {
       return Array.isArray(used) && used.length > 0;
     });
 
+    // Phase 3 H7 signals
+    const plannedMealsAdded = events.filter((e) => e.eventName === 'planned_meal_added');
+    const shoppingPurchased = events.filter((e) => e.eventName === 'shopping_item_purchased');
+    const shoppingMarkedHave = events.filter((e) => e.eventName === 'shopping_item_marked_have');
+    const shoppingManualAdded = events.filter((e) => e.eventName === 'shopping_item_added');
+    const shoppingQtyEdited = events.filter((e) => e.eventName === 'shopping_quantity_changed');
+    const purchasesApplied = events.filter((e) => e.eventName === 'purchase_applied_to_inventory');
+
     return {
       totalEvents: events.length,
       generationsCount: generated.length,
@@ -126,6 +134,13 @@ class TelemetryService {
       utilizationSelectionsCount: utilizationSelections.length,
       inventoryUpdatesCount: inventoryUpdates.length,
       inventoryItemsAddedCount: itemsAdded.length,
+      // Phase 3 H7 signals
+      plannedMealsAddedCount: plannedMealsAdded.length,
+      shoppingPurchasedCount: shoppingPurchased.length,
+      shoppingMarkedHaveCount: shoppingMarkedHave.length,
+      shoppingManualAddedCount: shoppingManualAdded.length,
+      shoppingQtyEditedCount: shoppingQtyEdited.length,
+      purchasesAppliedCount: purchasesApplied.length,
     };
   }
 }

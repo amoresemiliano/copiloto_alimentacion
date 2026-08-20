@@ -9,6 +9,7 @@ import {
   Check,
   ChefHat,
   Scale,
+  Calendar,
 } from 'lucide-react';
 
 export const DishDetailModal: React.FC = () => {
@@ -16,6 +17,7 @@ export const DishDetailModal: React.FC = () => {
     detailRecommendation,
     closeDetailModal,
     selectRecommendation,
+    openPlanMealModal,
     activeChosenRecommendation,
     inventory,
   } = useApp();
@@ -284,32 +286,46 @@ export const DishDetailModal: React.FC = () => {
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 bg-[#F9F9F8] border-t border-[#E5E5E3] flex items-center justify-end gap-2">
+        <div className="p-4 bg-[#F9F9F8] border-t border-[#E5E5E3] flex items-center justify-between gap-2">
           <button
-            id="modal-close-action-btn"
-            onClick={closeDetailModal}
-            className="text-xs font-semibold text-[#666666] hover:text-[#1A1A1A] px-4 py-2 rounded-full hover:bg-[#E5E5E3]/60 transition-colors cursor-pointer"
-          >
-            Cerrar
-          </button>
-
-          <button
-            id="modal-choose-btn"
+            id="modal-plan-btn"
             onClick={() => {
-              selectRecommendation(detailRecommendation);
+              openPlanMealModal(recipe);
               closeDetailModal();
             }}
-            className="text-xs font-bold bg-[#1A1A1A] hover:bg-black text-white px-5 py-2.5 rounded-full transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+            className="text-xs font-semibold text-[#1A1A1A] hover:bg-[#E5E5E3]/60 px-4 py-2.5 rounded-full border border-[#E5E5E3] transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            {isChosen ? (
-              <>
-                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Elegida como plato de hoy</span>
-              </>
-            ) : (
-              <span>Voy con esta opción</span>
-            )}
+            <Calendar className="w-3.5 h-3.5 text-[#FF6321]" />
+            <span>Planificar para después</span>
           </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              id="modal-close-action-btn"
+              onClick={closeDetailModal}
+              className="text-xs font-semibold text-[#666666] hover:text-[#1A1A1A] px-4 py-2 rounded-full hover:bg-[#E5E5E3]/60 transition-colors cursor-pointer"
+            >
+              Cerrar
+            </button>
+
+            <button
+              id="modal-choose-btn"
+              onClick={() => {
+                selectRecommendation(detailRecommendation);
+                closeDetailModal();
+              }}
+              className="text-xs font-bold bg-[#1A1A1A] hover:bg-black text-white px-5 py-2.5 rounded-full transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              {isChosen ? (
+                <>
+                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Elegida como plato de hoy</span>
+                </>
+              ) : (
+                <span>Voy con esta opción</span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

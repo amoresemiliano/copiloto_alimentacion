@@ -1,7 +1,7 @@
 import React from 'react';
 import { Recommendation } from '../types/domain';
 import { useApp } from '../context/AppContext';
-import { Clock, CheckCircle2, AlertCircle, Sparkles, ChevronRight, ThumbsDown, Check } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Sparkles, ChevronRight, ThumbsDown, Check, Calendar } from 'lucide-react';
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
@@ -14,7 +14,7 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
 }) => {
   const { recipe, matchPercentage, positiveReasons, missingCoreIngredients, priorityIngredientsUsed, rank } =
     recommendation;
-  const { selectRecommendation, openDetailModal, openRejectionModal } = useApp();
+  const { selectRecommendation, openDetailModal, openRejectionModal, openPlanMealModal } = useApp();
 
   const isMissingIngredients = missingCoreIngredients.length > 0;
   const isTopMatch = rank === 1 || matchPercentage >= 85;
@@ -144,14 +144,26 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
 
       {/* Action Footer */}
       <div className="flex items-center justify-between gap-2 px-5 py-3.5 bg-[#FAF9F6]/50 border-t border-[#F0F0F0]">
-        <button
-          id={`detail-btn-${recipe.id}`}
-          onClick={() => openDetailModal(recommendation)}
-          className="text-xs font-semibold text-[#1A1A1A] hover:bg-[#F0F0F0] px-3.5 py-2 rounded-full border border-[#E5E5E3] transition-colors flex items-center gap-1 cursor-pointer"
-        >
-          <span>Ver preparación</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            id={`detail-btn-${recipe.id}`}
+            onClick={() => openDetailModal(recommendation)}
+            className="text-xs font-semibold text-[#1A1A1A] hover:bg-[#F0F0F0] px-3.5 py-2 rounded-full border border-[#E5E5E3] transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <span>Ver preparación</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            id={`plan-btn-${recipe.id}`}
+            onClick={() => openPlanMealModal(recipe)}
+            className="text-xs font-medium text-[#666666] hover:text-[#1A1A1A] hover:bg-[#F0F0F0] px-3 py-2 rounded-full border border-[#E5E5E3] transition-colors flex items-center gap-1 cursor-pointer"
+            title="Guardar en tu plan de comidas"
+          >
+            <Calendar className="w-3.5 h-3.5 text-[#FF6321]" />
+            <span className="hidden sm:inline">Planificar</span>
+          </button>
+        </div>
 
         <button
           id={`choose-btn-${recipe.id}`}

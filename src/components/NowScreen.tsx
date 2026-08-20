@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { ContextCapture } from './ContextCapture';
 import { ActiveDecisionBanner } from './ActiveDecisionBanner';
 import { RecommendationCard } from './RecommendationCard';
-import { RotateCcw, PlusCircle, AlertCircle, Sparkles, X } from 'lucide-react';
+import { RotateCcw, PlusCircle, AlertCircle, Sparkles, X, Calendar, Utensils, ArrowRight } from 'lucide-react';
 
 export const NowScreen: React.FC = () => {
   const {
@@ -15,7 +15,17 @@ export const NowScreen: React.FC = () => {
     context,
     utilizationFilterIngredient,
     setUtilizationFilterIngredient,
+    plannedMeals,
+    recipes,
+    setTab,
   } = useApp();
+
+  const todayPlannedMeal = plannedMeals.find(
+    (m) => m.day === 'hoy' && m.status === 'planned' && (m.mealMoment === context.moment || true)
+  );
+  const todayPlannedRecipe = todayPlannedMeal?.recipeId
+    ? recipes.find((r) => r.id === todayPlannedMeal.recipeId)
+    : undefined;
 
   return (
     <div id="now-screen" className="space-y-6 pb-12 animate-fadeIn">
@@ -43,6 +53,51 @@ export const NowScreen: React.FC = () => {
           <span className="hidden sm:inline">Ya comí / </span>Registrar
         </button>
       </div>
+
+      {/* Planned Meal Notice for Today (if any planned meal exists) */}
+      {todayPlannedMeal && (
+        <div
+          id="today-planned-notice"
+          className="bg-white border border-[#E5E5E3] p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#FFF2EB] text-[#FF6321] flex items-center justify-center font-bold shrink-0 mt-0.5">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF6321] bg-[#FFF2EB] px-2 py-0.5 rounded-md">
+                  Planificado para {todayPlannedMeal.mealMoment}
+                </span>
+                <span className="text-xs text-[#8C8C8C]">({todayPlannedMeal.servings} porciones)</span>
+              </div>
+              <p className="text-sm font-bold text-[#1A1A1A] mt-0.5">{todayPlannedMeal.recipeName}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            <button
+              onClick={() =>
+                openLogMealModal({
+                  recipe: todayPlannedRecipe,
+                  suggested: true,
+                  plannedMealId: todayPlannedMeal.id,
+                })
+              }
+              className="px-3 py-1.5 bg-[#1A1A1A] text-white text-xs font-bold rounded-xl hover:bg-black transition-all flex items-center gap-1 shadow-2xs"
+            >
+              <Utensils className="w-3 h-3 text-[#FF6321]" />
+              <span>Cocinar esto</span>
+            </button>
+            <button
+              onClick={() => setTab('plan')}
+              className="px-3 py-1.5 border border-[#E5E5E3] text-[#666666] hover:text-[#1A1A1A] text-xs font-semibold rounded-xl hover:bg-[#F0F0F0] transition-colors"
+            >
+              Ver plan
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Utilization Focus Banner (if filtered from Mi Cocina) */}
       {utilizationFilterIngredient && (

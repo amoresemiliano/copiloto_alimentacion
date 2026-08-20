@@ -1,4 +1,4 @@
-import { InventoryItem, Recipe, MealEvent, UserContext } from '../types/domain';
+import { InventoryItem, Recipe, MealEvent, UserContext, PlannedMeal, ShoppingItem, PurchaseEvent } from '../types/domain';
 
 export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
   {
@@ -567,6 +567,77 @@ export const INITIAL_RECENT_MEALS: MealEvent[] = [
   },
 ];
 
+export const INITIAL_PLANNED_MEALS: PlannedMeal[] = [
+  {
+    id: 'plan_init_1',
+    day: 'hoy',
+    dateLabel: 'Hoy',
+    mealMoment: 'cena',
+    recipeId: 'rec_salteado_pollo_espinaca',
+    recipeName: 'Salteado express de pollo con espinaca y tomate',
+    servings: 2,
+    status: 'planned',
+    source: 'recommendation_save',
+    createdAt: new Date(Date.now() - 3600 * 1000 * 5).toISOString(),
+    updatedAt: new Date(Date.now() - 3600 * 1000 * 5).toISOString(),
+  },
+  {
+    id: 'plan_init_2',
+    day: 'manana',
+    dateLabel: 'Mañana',
+    mealMoment: 'almuerzo',
+    recipeId: 'rec_tortilla_zucchini',
+    recipeName: 'Tortilla rápida de zucchini y queso',
+    servings: 2,
+    status: 'planned',
+    source: 'recommendation_save',
+    createdAt: new Date(Date.now() - 3600 * 1000 * 3).toISOString(),
+    updatedAt: new Date(Date.now() - 3600 * 1000 * 3).toISOString(),
+  },
+];
+
+export const INITIAL_SHOPPING_ITEMS: ShoppingItem[] = [];
+
+export const INITIAL_PURCHASE_HISTORY: PurchaseEvent[] = [
+  {
+    id: 'purch_hist_1',
+    timestamp: new Date(Date.now() - 24 * 3600 * 1000 * 3).toISOString(), // 3 días atrás
+    items: [
+      {
+        id: 'shop_past_1',
+        name: 'Huevos',
+        category: 'lacteos_huevos',
+        quantityText: '6 unidades',
+        purchasedQuantity: 6,
+        unit: 'unidades',
+        reason: 'Reposición semanal',
+        origin: 'manual',
+        status: 'purchased',
+        createdAt: new Date(Date.now() - 24 * 3600 * 1000 * 3).toISOString(),
+        updatedAt: new Date(Date.now() - 24 * 3600 * 1000 * 3).toISOString(),
+      },
+      {
+        id: 'shop_past_2',
+        name: 'Espinaca fresca',
+        category: 'verduras',
+        quantityText: '1 atado',
+        purchasedQuantity: 1,
+        unit: 'atado',
+        reason: 'Verdulería de barrio',
+        origin: 'manual',
+        status: 'purchased',
+        createdAt: new Date(Date.now() - 24 * 3600 * 1000 * 3).toISOString(),
+        updatedAt: new Date(Date.now() - 24 * 3600 * 1000 * 3).toISOString(),
+      },
+    ],
+    appliedChangesSummary: [
+      'Agregado a Mi Cocina: Huevos (6 unidades)',
+      'Agregado a Mi Cocina: Espinaca fresca (1 atado)',
+    ],
+    source: 'shopping_purchase',
+  },
+];
+
 export function getInitialMomentByHour(): UserContext['moment'] {
   const hour = new Date().getHours();
   if (hour >= 6 && hour < 11) return 'desayuno';
@@ -584,3 +655,4 @@ export const INITIAL_USER_CONTEXT: UserContext = {
   priority: 'automatico',
   lastUpdated: new Date().toISOString(),
 };
+

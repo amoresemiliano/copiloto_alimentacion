@@ -34,12 +34,14 @@ export const MealLogModal: React.FC = () => {
         selectedRecipeId,
         recipeName: rec?.name || 'Receta sugerida',
         wasSuggested: true,
+        plannedMealId: logMealPrefill?.plannedMealId,
       });
     } else {
       logRealMeal({
         mealMoment,
         customText: customText.trim() || 'Comida no sugerida',
         wasSuggested: false,
+        plannedMealId: logMealPrefill?.plannedMealId,
       });
     }
   };
