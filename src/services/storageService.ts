@@ -8,6 +8,8 @@ import {
   PurchaseEvent,
   AffinityProfile,
   BehavioralSignal,
+  ConversationMessage,
+  DietaryRestriction,
 } from '../types/domain';
 import {
   INITIAL_INVENTORY_ITEMS,
@@ -30,6 +32,8 @@ const KEYS = {
   PURCHASE_HISTORY: 'copiloto_purchase_history_v1',
   AFFINITY_PROFILE: 'copiloto_affinity_profile_v1',
   BEHAVIORAL_SIGNALS: 'copiloto_behavioral_signals_v1',
+  CONVERSATION_MESSAGES: 'copiloto_conversation_messages_v1',
+  DIETARY_RESTRICTIONS: 'copiloto_dietary_restrictions_v1',
 };
 
 export class StorageService {
@@ -220,6 +224,42 @@ export class StorageService {
     }
   }
 
+  public getConversationMessages(): ConversationMessage[] {
+    try {
+      const raw = localStorage.getItem(KEYS.CONVERSATION_MESSAGES);
+      if (raw) return JSON.parse(raw);
+    } catch {
+      // fallback
+    }
+    return [];
+  }
+
+  public saveConversationMessages(messages: ConversationMessage[]): void {
+    try {
+      localStorage.setItem(KEYS.CONVERSATION_MESSAGES, JSON.stringify(messages));
+    } catch {
+      // fallback
+    }
+  }
+
+  public getDietaryRestrictions(): DietaryRestriction[] {
+    try {
+      const raw = localStorage.getItem(KEYS.DIETARY_RESTRICTIONS);
+      if (raw) return JSON.parse(raw);
+    } catch {
+      // fallback
+    }
+    return [];
+  }
+
+  public saveDietaryRestrictions(restrictions: DietaryRestriction[]): void {
+    try {
+      localStorage.setItem(KEYS.DIETARY_RESTRICTIONS, JSON.stringify(restrictions));
+    } catch {
+      // fallback
+    }
+  }
+
   public resetAllToFixtures(): void {
     try {
       localStorage.removeItem(KEYS.INVENTORY);
@@ -232,6 +272,8 @@ export class StorageService {
       localStorage.removeItem(KEYS.PURCHASE_HISTORY);
       localStorage.removeItem(KEYS.AFFINITY_PROFILE);
       localStorage.removeItem(KEYS.BEHAVIORAL_SIGNALS);
+      localStorage.removeItem(KEYS.CONVERSATION_MESSAGES);
+      localStorage.removeItem(KEYS.DIETARY_RESTRICTIONS);
     } catch {
       // fallback
     }

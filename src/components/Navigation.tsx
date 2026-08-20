@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp, AppTab } from '../context/AppContext';
-import { Compass, Calendar, ShoppingCart, UtensilsCrossed, History, Activity } from 'lucide-react';
+import { Compass, MessageSquare, Calendar, ShoppingCart, UtensilsCrossed, History, Activity } from 'lucide-react';
 
 export const Navigation: React.FC = () => {
   const { currentTab, setTab, plannedMeals, shoppingItems } = useApp();
@@ -10,6 +10,7 @@ export const Navigation: React.FC = () => {
 
   const tabs: { id: AppTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }[] = [
     { id: 'ahora', label: 'Ahora', icon: Compass },
+    { id: 'copiloto', label: 'Copiloto', icon: MessageSquare },
     { id: 'plan', label: 'Plan', icon: Calendar, badge: activePlanCount > 0 ? activePlanCount : undefined },
     { id: 'compras', label: 'Compras', icon: ShoppingCart, badge: pendingShoppingCount > 0 ? pendingShoppingCount : undefined },
     { id: 'cocina', label: 'Mi Cocina', icon: UtensilsCrossed },
@@ -31,7 +32,7 @@ export const Navigation: React.FC = () => {
                 Copiloto de Alimentación
               </span>
               <span className="text-[11px] font-medium text-[#8C8C8C] block leading-tight">
-                Fase 3 · Planificación + Compras
+                Fase 5 · Interfaz Conversacional + Cerebro Compartido
               </span>
             </div>
           </div>
@@ -72,7 +73,7 @@ export const Navigation: React.FC = () => {
 
       {/* Mobile Bottom Navigation Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5E5E3] px-2 py-1.5 safe-area-pb">
-        <div className="max-w-md mx-auto grid grid-cols-6 gap-0.5">
+        <div className="max-w-md mx-auto grid grid-cols-7 gap-0.5">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = currentTab === tab.id;

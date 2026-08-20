@@ -126,6 +126,25 @@ export const NowScreen: React.FC = () => {
       {/* Active Decision Banner (if user picked an option previously) */}
       <ActiveDecisionBanner />
 
+      {/* Conversational Assistant Link Card */}
+      <div className="bg-[#FAF9F6] border border-[#EBEBEA] hover:border-[#1A1A1A] p-3 rounded-2xl flex items-center justify-between gap-3 transition-all">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-xl bg-[#1A1A1A] text-white flex items-center justify-center font-bold text-xs shrink-0">
+            <Sparkles className="w-3.5 h-3.5 text-[#FF6321]" />
+          </div>
+          <p className="text-xs text-[#525252]">
+            ¿Preferís pedir algo en lenguaje natural? <strong className="text-[#1A1A1A]">Hablá con el Copiloto</strong>
+          </p>
+        </div>
+        <button
+          onClick={() => setTab('copiloto')}
+          className="px-3 py-1.5 bg-white border border-[#E5E5E3] hover:bg-[#1A1A1A] hover:text-white text-[#1A1A1A] text-xs font-semibold rounded-xl transition-all flex items-center gap-1 shrink-0 shadow-2xs"
+        >
+          <span>Abrir chat</span>
+          <ArrowRight className="w-3 h-3" />
+        </button>
+      </div>
+
       {/* Quick Context Capture Component */}
       <ContextCapture />
 

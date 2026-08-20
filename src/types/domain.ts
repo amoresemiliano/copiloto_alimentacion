@@ -269,7 +269,21 @@ export type TelemetryEventName =
   | 'favorite_ingredient_toggled'
   | 'avoided_ingredient_toggled'
   | 'affinity_profile_updated'
-  | 'learning_profile_reset';
+  | 'learning_profile_reset'
+  // Phase 5 events
+  | 'conversation_started'
+  | 'conversation_message_sent'
+  | 'conversation_intent_detected'
+  | 'conversation_intent_corrected'
+  | 'conversation_action_executed'
+  | 'conversation_clarification_requested'
+  | 'conversation_fallback'
+  | 'conversation_recommendation_selected'
+  | 'conversation_meal_logged'
+  | 'conversation_inventory_updated'
+  | 'conversation_purchase_updated'
+  | 'conversation_preference_updated'
+  | 'conversation_hypothesis_updated';
 
 export interface TelemetryEvent {
   id: string;
@@ -365,4 +379,128 @@ export interface AffinityProfile {
   hypotheses: LearningHypothesis[];
   signalsCount: number;
   lastCalculatedAt: string;
+}
+
+// ----------------------------------------------------
+// FASE 5: Interfaz Conversacional sobre Cerebro Compartido
+// ----------------------------------------------------
+
+export interface DietaryRestriction {
+  id: string;
+  type: 'allergy' | 'intolerance' | 'strict_exclusion';
+  ingredientOrCategory: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export type ConversationRole = 'user' | 'assistant' | 'system';
+
+export type ConversationIntentType =
+  | 'get_recommendations'
+  | 'update_context'
+  | 'query_inventory'
+  | 'update_inventory'
+  | 'log_real_meal'
+  | 'query_planning'
+  | 'plan_meal'
+  | 'query_shopping'
+  | 'update_shopping'
+  | 'query_learning'
+  | 'correct_learning'
+  | 'set_preference'
+  | 'explain_recommendation'
+  | 'fallback_unknown';
+
+export interface ConversationIngredientEntity {
+  name: string;
+  action?: 'add' | 'remove' | 'set_status' | 'consume_soon';
+  status?: IngredientAvailability;
+  priority?: IngredientPriority;
+  quantityText?: string;
+  confidence?: ConfidenceLevel;
+  notes?: string;
+}
+
+export interface ConversationIntentEntities {
+  moment?: MealMoment;
+  hunger?: HungerLevel;
+  energy?: EnergyLevel;
+  timeLimit?: CookingTimeLimit;
+  motivation?: CookingMotivation;
+  priority?: UserPriority;
+  ingredients?: ConversationIngredientEntity[];
+  mealText?: string;
+  recipeName?: string;
+  recipeId?: string;
+  planDay?: PlanDay;
+  preferenceType?: 'permanent_dislike' | 'contextual_dislike' | 'hard_restriction' | 'favorite';
+  preferenceValue?: string;
+  hypothesisFeedback?: 'confirm' | 'dismiss' | 'reassess';
+  hypothesisId?: string;
+  shoppingItemNames?: string[];
+  queryTarget?: 'general' | 'expiring_soon' | 'fridge' | 'pantry';
+  uncertainty?: boolean;
+}
+
+export interface ConversationIntent {
+  type: ConversationIntentType;
+  confidence: number; // 0 to 1
+  rawMessage: string;
+  entities: ConversationIntentEntities;
+  clarificationNeeded?: boolean;
+  clarificationPrompt?: string;
+  proposedActionSummary?: string;
+}
+
+export type ConversationActionType =
+  | 'UPDATE_CONTEXT'
+  | 'FETCH_RECOMMENDATIONS'
+  | 'UPDATE_INVENTORY_ITEMS'
+  | 'LOG_REAL_MEAL'
+  | 'PLAN_MEAL'
+  | 'UPDATE_SHOPPING_ITEMS'
+  | 'APPLY_PURCHASE'
+  | 'SET_PREFERENCE'
+  | 'UPDATE_HYPOTHESIS'
+  | 'SHOW_INSIGHTS'
+  | 'EXPLAIN_RECOMMENDATION'
+  | 'REQUEST_CLARIFICATION'
+  | 'FALLBACK';
+
+export interface ConversationAction {
+  type: ConversationActionType;
+  payload: Record<string, unknown>;
+  status: 'executed' | 'pending_confirmation' | 'cancelled';
+  description: string;
+}
+
+export interface ConversationExplanation {
+  recipeId: string;
+  recipeName: string;
+  matchPercentage: number;
+  totalScore: number;
+  positiveReasons: string[];
+  penalties: string[];
+  factors: RecommendationFactors;
+  missingIngredients: string[];
+}
+
+export interface ConversationMessage {
+  id: string;
+  role: ConversationRole;
+  text: string;
+  timestamp: string;
+  intent?: ConversationIntent;
+  actions?: ConversationAction[];
+  payload?: {
+    recommendations?: Recommendation[];
+    inventoryItems?: InventoryItem[];
+    plannedMeals?: PlannedMeal[];
+    shoppingItems?: ShoppingItem[];
+    hypotheses?: LearningHypothesis[];
+    explanation?: ConversationExplanation;
+    suggestedReplies?: string[];
+    appliedChangesSummary?: string[];
+    dietaryRestrictions?: DietaryRestriction[];
+  };
 }

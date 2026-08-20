@@ -2,6 +2,7 @@ import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navigation } from './components/Navigation';
 import { NowScreen } from './components/NowScreen';
+import { ConversationView } from './components/ConversationView';
 import { PlanningScreen } from './components/PlanningScreen';
 import { ShoppingScreen } from './components/ShoppingScreen';
 import { KitchenScreen } from './components/KitchenScreen';
@@ -21,6 +22,7 @@ const MainContent: React.FC = () => {
 
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 pt-5 pb-24 sm:pb-14">
         {currentTab === 'ahora' && <NowScreen />}
+        {currentTab === 'copiloto' && <ConversationView />}
         {currentTab === 'plan' && <PlanningScreen />}
         {currentTab === 'compras' && <ShoppingScreen />}
         {currentTab === 'cocina' && <KitchenScreen />}

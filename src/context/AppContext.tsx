@@ -17,6 +17,8 @@ import {
   AffinityProfile,
   BehavioralSignal,
   HypothesisStatus,
+  ConversationMessage,
+  DietaryRestriction,
 } from '../types/domain';
 import { storageService } from '../services/storageService';
 import { telemetryService } from '../services/telemetryService';
@@ -26,6 +28,7 @@ import { shoppingService } from '../services/shoppingService';
 import { inventoryMergeService, InventoryMergeResult } from '../services/inventoryMergeService';
 import { planningService } from '../services/planningService';
 import { learningService } from '../services/learningService';
+import { conversationService, ConversationExecutionResult } from '../services/conversationService';
 import {
   INITIAL_INVENTORY_ITEMS,
   INITIAL_RECIPES,
@@ -36,7 +39,7 @@ import {
   INITIAL_PURCHASE_HISTORY,
 } from '../data/fixtures';
 
-export type AppTab = 'ahora' | 'plan' | 'compras' | 'cocina' | 'historial' | 'mas';
+export type AppTab = 'ahora' | 'copiloto' | 'plan' | 'compras' | 'cocina' | 'historial' | 'mas';
 
 interface AppContextType {
   // Core state
@@ -136,6 +139,14 @@ interface AppContextType {
   toggleAvoidedIngredient: (ingredientName: string) => void;
   resetLearningProfile: () => void;
   recordExplicitSignal: (signal: Omit<BehavioralSignal, 'id' | 'timestamp'>) => void;
+
+  // Phase 5: Conversational Interface over Shared Core
+  conversationMessages: ConversationMessage[];
+  dietaryRestrictions: DietaryRestriction[];
+  sendConversationMessage: (text: string) => ConversationExecutionResult;
+  clearConversation: () => void;
+  addDietaryRestriction: (restriction: Omit<DietaryRestriction, 'id' | 'createdAt'>) => void;
+  removeDietaryRestriction: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -162,6 +173,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = storageService.getAffinityProfile();
     return saved || { favoriteIngredients: ['Huevos', 'Tomates'], avoidedIngredients: [] };
   });
+
+  // Phase 5 Conversational State
+  const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>(() => {
+    const saved = storageService.getConversationMessages();
+    if (saved && saved.length > 0) return saved;
+    return [
+      {
+        id: 'msg_init',
+        role: 'assistant',
+        text: 'Hola. Soy tu Copiloto de Alimentación conectado a tu cocina, plan y preferencias en tiempo real. Podés pedirme ideas para comer, decirme qué compraste, registrar comidas o consultar tus hábitos.',
+        timestamp: new Date().toISOString(),
+        payload: {
+          suggestedReplies: [
+            '¿Qué puedo cenar rápido?',
+            'Tengo 15 minutos y poca energía',
+            'Tengo pollo, tomate, queso y huevos',
+            '¿Qué aprendiste de mí?',
+          ],
+        },
+      },
+    ];
+  });
+  const [dietaryRestrictions, setDietaryRestrictions] = useState<DietaryRestriction[]>(() =>
+    storageService.getDietaryRestrictions()
+  );
 
   const behavioralSignals = useMemo(() => {
     const derived = learningService.deriveSignalsFromHistory(recentMeals, [], plannedMeals, recipes);
@@ -864,6 +900,188 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTelemetryEvents(telemetryService.getEvents());
   }, []);
 
+  // Phase 5 Conversational Callbacks
+  const sendConversationMessage = useCallback(
+    (text: string): ConversationExecutionResult => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        throw new Error('Empty message');
+      }
+
+      const timestamp = new Date().toISOString();
+      const userMsgId = `user_${Date.now()}`;
+      const userMsg: ConversationMessage = {
+        id: userMsgId,
+        role: 'user',
+        text: trimmed,
+        timestamp,
+      };
+
+      telemetryService.track('conversation_message_sent', { textLength: trimmed.length });
+
+      // Run orchestrator with current single-source-of-truth state
+      const result = conversationService.processMessage(
+        trimmed,
+        context,
+        inventory,
+        recipes,
+        recentMeals,
+        plannedMeals,
+        shoppingItems,
+        affinityProfile,
+        dietaryRestrictions,
+        rejectedRecipeIds
+      );
+
+      // Track intent
+      telemetryService.track('conversation_intent_detected', {
+        intentType: result.message.intent?.type,
+        confidence: result.message.intent?.confidence,
+        rawMessage: trimmed,
+      });
+
+      // Apply state patches back to central store
+      if (result.contextPatch) {
+        const newCtx = { ...context, ...result.contextPatch, lastUpdated: timestamp };
+        setContext(newCtx);
+        storageService.saveContext(newCtx);
+      }
+
+      if (result.inventoryUpdates) {
+        setInventory(result.inventoryUpdates);
+        storageService.saveInventory(result.inventoryUpdates);
+        telemetryService.track('conversation_inventory_updated', {
+          itemCount: result.inventoryUpdates.length,
+        });
+      }
+
+      if (result.mealEvent) {
+        const newMeals = [result.mealEvent, ...recentMeals];
+        setRecentMeals(newMeals);
+        storageService.saveRecentMeals(newMeals);
+        telemetryService.track('conversation_meal_logged', {
+          recipeName: result.mealEvent.recipeName,
+          moment: result.mealEvent.mealMoment,
+        });
+      }
+
+      if (result.plannedMeal) {
+        const newPlan = [...plannedMeals, result.plannedMeal];
+        setPlannedMeals(newPlan);
+        storageService.savePlannedMeals(newPlan);
+      }
+
+      if (result.shoppingItemsUpdate) {
+        setShoppingItems(result.shoppingItemsUpdate);
+        storageService.saveShoppingItems(result.shoppingItemsUpdate);
+        telemetryService.track('conversation_purchase_updated', {
+          itemsCount: result.shoppingItemsUpdate.length,
+        });
+      }
+
+      if (result.affinityProfileUpdate) {
+        setCustomProfileOverrides({
+          favoriteIngredients: result.affinityProfileUpdate.favoriteIngredients,
+          avoidedIngredients: result.affinityProfileUpdate.avoidedIngredients,
+          hypotheses: result.affinityProfileUpdate.hypotheses,
+        });
+        storageService.saveAffinityProfile(result.affinityProfileUpdate);
+        telemetryService.track('conversation_preference_updated', {});
+      }
+
+      if (result.dietaryRestrictionsUpdate) {
+        setDietaryRestrictions(result.dietaryRestrictionsUpdate);
+        storageService.saveDietaryRestrictions(result.dietaryRestrictionsUpdate);
+      }
+
+      if (result.dismissedHypothesisId) {
+        telemetryService.track('hypothesis_dismissed', {
+          hypothesisId: result.dismissedHypothesisId,
+          source: 'conversation',
+        });
+      }
+
+      if (result.confirmedHypothesisId) {
+        telemetryService.track('hypothesis_confirmed', {
+          hypothesisId: result.confirmedHypothesisId,
+          source: 'conversation',
+        });
+      }
+
+      if (result.message.actions && result.message.actions.length > 0) {
+        telemetryService.track('conversation_action_executed', {
+          actionTypes: result.message.actions.map((a) => a.type),
+        });
+      } else if (result.message.intent?.type === 'fallback_unknown') {
+        telemetryService.track('conversation_fallback', { rawMessage: trimmed });
+      }
+
+      const updatedMessages = [...conversationMessages, userMsg, result.message];
+      setConversationMessages(updatedMessages);
+      storageService.saveConversationMessages(updatedMessages);
+
+      setTelemetryEvents(telemetryService.getEvents());
+
+      return result;
+    },
+    [
+      conversationMessages,
+      context,
+      inventory,
+      recipes,
+      recentMeals,
+      plannedMeals,
+      shoppingItems,
+      affinityProfile,
+      dietaryRestrictions,
+      rejectedRecipeIds,
+    ]
+  );
+
+  const clearConversation = useCallback(() => {
+    const defaultMessages: ConversationMessage[] = [
+      {
+        id: 'msg_init',
+        role: 'assistant',
+        text: 'Conversación reiniciada. ¿En qué puedo ayudarte hoy?',
+        timestamp: new Date().toISOString(),
+        payload: {
+          suggestedReplies: [
+            '¿Qué puedo cenar rápido?',
+            'Tengo 15 minutos y poca energía',
+            '¿Qué tengo para usar pronto?',
+            '¿Qué aprendiste de mí?',
+          ],
+        },
+      },
+    ];
+    setConversationMessages(defaultMessages);
+    storageService.saveConversationMessages(defaultMessages);
+  }, []);
+
+  const addDietaryRestriction = useCallback(
+    (restriction: Omit<DietaryRestriction, 'id' | 'createdAt'>) => {
+      const newRestriction: DietaryRestriction = {
+        ...restriction,
+        id: `restr_${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      };
+      const updated = [...dietaryRestrictions, newRestriction];
+      setDietaryRestrictions(updated);
+      storageService.saveDietaryRestrictions(updated);
+    },
+    [dietaryRestrictions]
+  );
+
+  const removeDietaryRestriction = useCallback(
+    (id: string) => {
+      const updated = dietaryRestrictions.filter((r) => r.id !== id);
+      setDietaryRestrictions(updated);
+      storageService.saveDietaryRestrictions(updated);
+    },
+    [dietaryRestrictions]
+  );
+
   const resetAllFixtures = useCallback(() => {
     storageService.resetAllToFixtures();
     setContext({ ...INITIAL_USER_CONTEXT });
@@ -878,6 +1096,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsShoppingActiveMode(false);
     setExplicitSignals([]);
     setCustomProfileOverrides({ favoriteIngredients: ['Huevos', 'Tomates'], avoidedIngredients: [] });
+    setDietaryRestrictions([]);
+    setConversationMessages([
+      {
+        id: 'msg_init',
+        role: 'assistant',
+        text: 'Hola. Soy tu Copiloto de Alimentación conectado a tu cocina, plan y preferencias en tiempo real. Podés pedirme ideas para comer, decirme qué compraste, registrar comidas o consultar tus hábitos.',
+        timestamp: new Date().toISOString(),
+        payload: {
+          suggestedReplies: [
+            '¿Qué puedo cenar rápido?',
+            'Tengo 15 minutos y poca energía',
+            'Tengo pollo, tomate, queso y huevos',
+            '¿Qué aprendiste de mí?',
+          ],
+        },
+      },
+    ]);
     telemetryService.track('fixtures_reset', {});
     setTelemetryEvents(telemetryService.getEvents());
   }, []);
@@ -916,6 +1151,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Phase 4 state
     affinityProfile,
     behavioralSignals,
+
+    // Phase 5 state
+    conversationMessages,
+    dietaryRestrictions,
 
     setTab: setCurrentTab,
     updateContext,
@@ -958,6 +1197,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toggleAvoidedIngredient,
     resetLearningProfile,
     recordExplicitSignal,
+
+    // Phase 5 Actions
+    sendConversationMessage,
+    clearConversation,
+    addDietaryRestriction,
+    removeDietaryRestriction,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
