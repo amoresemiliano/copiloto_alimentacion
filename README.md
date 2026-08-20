@@ -1,6 +1,6 @@
-# Base de Conocimiento — Agente de Alimentación v2
+# Base de Conocimiento — Copiloto de Alimentación
 
-Este paquete consolida la visión del proyecto de **inteligencia alimentaria personal** y suma los aprendizajes del trabajo de innovación aplicado al desperdicio de frutas y verduras en el hogar.
+Este paquete consolida la visión del proyecto de **Inteligencia Alimentaria Personal** y suma los aprendizajes del trabajo de innovación aplicado al desperdicio de frutas y verduras en el hogar.
 
 ## Propósito
 
