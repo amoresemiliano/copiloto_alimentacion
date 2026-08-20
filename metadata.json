@@ -1,0 +1,6 @@
+{
+  "name": "Copiloto de Alimentación",
+  "description": "Copiloto inteligente para decidir qué comer ahora según contexto, tiempo, ingredientes y alimentación reciente sin fricción.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

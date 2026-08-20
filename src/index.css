@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #F7F6F3;
+    color: #2D2D2D;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  h1.font-serif, h2.font-serif, .font-serif {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+}
+
+@layer utilities {
+  /* Safe area for mobile devices */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0.5rem);
+  }
+
+  /* Custom subtle fade in */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fadeIn {
+    animation: fadeIn 0.18s ease-out forwards;
+  }
+
+  /* Hide scrollbar for category pill sliders */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

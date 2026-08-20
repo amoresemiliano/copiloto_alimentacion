@@ -1,0 +1,533 @@
+import { InventoryItem, Recipe, MealEvent, UserContext } from '../types/domain';
+
+export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
+  {
+    id: 'inv_huevos',
+    name: 'Huevos',
+    category: 'lacteos_huevos',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'unidades',
+    quantityDemo: '6',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_tomates',
+    name: 'Tomates',
+    category: 'verduras',
+    status: 'tengo',
+    priority: 'consumir_pronto',
+    unitDemo: 'unidades',
+    quantityDemo: '3',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_queso',
+    name: 'Queso cremoso / mozzarella',
+    category: 'lacteos_huevos',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'g',
+    quantityDemo: '200',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_zucchini',
+    name: 'Zucchini / Calabacín',
+    category: 'verduras',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'unidades',
+    quantityDemo: '2',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_espinaca',
+    name: 'Espinaca fresca',
+    category: 'verduras',
+    status: 'tengo',
+    priority: 'prioritario',
+    unitDemo: 'atado',
+    quantityDemo: '1',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_arroz',
+    name: 'Arroz blanco o integral',
+    category: 'despensa',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'paquete',
+    quantityDemo: '1',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_fideos',
+    name: 'Fideos secos',
+    category: 'despensa',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'paquete',
+    quantityDemo: '1',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_pollo',
+    name: 'Pechuga de pollo',
+    category: 'carnes_proteinas',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'g',
+    quantityDemo: '350',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_cebolla',
+    name: 'Cebollas',
+    category: 'verduras',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'unidades',
+    quantityDemo: '4',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_atun',
+    name: 'Atún en lata',
+    category: 'carnes_proteinas',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'latas',
+    quantityDemo: '2',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_pan',
+    name: 'Pan integral / masa madre',
+    category: 'despensa',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'rodajas',
+    quantityDemo: '6',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_palta',
+    name: 'Palta / Aguacate',
+    category: 'verduras',
+    status: 'queda_poco',
+    priority: 'consumir_pronto',
+    unitDemo: 'unidades',
+    quantityDemo: '1',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_avena',
+    name: 'Avena en copos',
+    category: 'despensa',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'g',
+    quantityDemo: '400',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_leche',
+    name: 'Leche o bebida vegetal',
+    category: 'lacteos_huevos',
+    status: 'tengo',
+    priority: 'normal',
+    unitDemo: 'ml',
+    quantityDemo: '500',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv_carne_picada',
+    name: 'Carne vacuna picada',
+    category: 'carnes_proteinas',
+    status: 'no_tengo',
+    priority: 'normal',
+    unitDemo: 'g',
+    quantityDemo: '0',
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+export const INITIAL_RECIPES: Recipe[] = [
+  {
+    id: 'rec_tortilla_zucchini',
+    name: 'Tortilla rápida de zucchini y queso',
+    description: 'Tierna y dorada, se prepara en sartén con muy poco esfuerzo e ingredientes frescos.',
+    mealMoments: ['almuerzo', 'cena'],
+    prepTimeMinutes: 14,
+    complexity: 'muy_baja',
+    satiety: 'medio',
+    costCategory: 'economico',
+    tags: ['rápido', 'vegetariano', 'sartén', 'pocos_ingredientes'],
+    photoUrl: 'https://images.unsplash.com/photo-1584776296944-ab6fb57b0bdd?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Huevos', inventoryItemId: 'inv_huevos', quantityDemo: '2 unidades', isCore: true },
+      { name: 'Zucchini / Calabacín', inventoryItemId: 'inv_zucchini', quantityDemo: '1 unidad rallada', isCore: true },
+      { name: 'Queso cremoso / mozzarella', inventoryItemId: 'inv_queso', quantityDemo: '50g en cubos', isCore: true },
+      { name: 'Tomates', inventoryItemId: 'inv_tomates', quantityDemo: '1 unidad picada (opcional)', isCore: false, optional: true },
+      { name: 'Aceite de oliva y sal', isCore: false },
+    ],
+    steps: [
+      'Rallar el zucchini grueso y escurrir el exceso de líquido con la mano.',
+      'Batir los 2 huevos con una pizca de sal, pimienta y agregar el zucchini.',
+      'Calentar una sartén antiadherente con unas gotas de aceite.',
+      'Verter la mezcla, colocar los cubos de queso en el centro y cocinar a fuego medio 4-5 min.',
+      'Dar vuelta con espátula o plato y dorar 3 minutos más.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 320 kcal, rica en proteínas).',
+      demoCaloriesApprox: 320,
+    }
+  },
+  {
+    id: 'rec_salteado_pollo_espinaca',
+    name: 'Salteado express de pollo con espinaca y tomate',
+    description: 'Corte rápido a la sartén con proteína magra y vegetales de aprovechamiento.',
+    mealMoments: ['almuerzo', 'cena'],
+    prepTimeMinutes: 18,
+    complexity: 'baja',
+    satiety: 'contundente',
+    costCategory: 'medio',
+    tags: ['alto_en_proteina', 'aprovechamiento', 'sartén'],
+    photoUrl: 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Pechuga de pollo', inventoryItemId: 'inv_pollo', quantityDemo: '200g cortado en tiras', isCore: true },
+      { name: 'Espinaca fresca', inventoryItemId: 'inv_espinaca', quantityDemo: '1 atado lavado', isCore: true },
+      { name: 'Tomates', inventoryItemId: 'inv_tomates', quantityDemo: '2 unidades cortadas en gajos', isCore: true },
+      { name: 'Cebollas', inventoryItemId: 'inv_cebolla', quantityDemo: '1/2 unidad', isCore: false },
+    ],
+    steps: [
+      'Cortar la pechuga en tiras delgadas para que se cocine en pocos minutos.',
+      'Dorar el pollo en sartén caliente con aceite durante 4 minutos.',
+      'Sumar la cebolla y los tomates en gajos hasta que tomen color.',
+      'Incorporar la espinaca entera al final, tapar 1 minuto hasta que reduzca y apagar el fuego.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 380 kcal, saciante y nutritivo).',
+      demoCaloriesApprox: 380,
+    }
+  },
+  {
+    id: 'rec_pasta_tomate_queso',
+    name: 'Pasta simple con tomates frescos y queso fundido',
+    description: 'Confortante, rápida y perfecta para cuando se busca algo sabroso sin complicarse.',
+    mealMoments: ['almuerzo', 'cena'],
+    prepTimeMinutes: 16,
+    complexity: 'muy_baja',
+    satiety: 'medio',
+    costCategory: 'economico',
+    tags: ['reconfortante', 'vegetariano', 'rápido'],
+    photoUrl: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281290?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Fideos secos', inventoryItemId: 'inv_fideos', quantityDemo: '100g', isCore: true },
+      { name: 'Tomates', inventoryItemId: 'inv_tomates', quantityDemo: '2 unidades maduros', isCore: true },
+      { name: 'Queso cremoso / mozzarella', inventoryItemId: 'inv_queso', quantityDemo: '60g', isCore: true },
+      { name: 'Aceite de oliva y orégano', isCore: false },
+    ],
+    steps: [
+      'Hervir agua y cocinar la pasta según el paquete (8-10 min).',
+      'En una sartén, saltear los tomates cubeteados con aceite de oliva, ajo o sal 4 min.',
+      'Colar la pasta reservando un chorrito de agua de cocción.',
+      'Mezclar la pasta caliente con los tomates y agregar el queso para que funda suavemente.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 460 kcal, fuente de energía rápida).',
+      demoCaloriesApprox: 460,
+    }
+  },
+  {
+    id: 'rec_bowl_arroz_atun_palta',
+    name: 'Bowl fresco de arroz, atún, tomate y palta',
+    description: 'Sin cocción compleja (o con arroz ya cocido/express), fresco y muy saciante.',
+    mealMoments: ['almuerzo', 'cena'],
+    prepTimeMinutes: 10,
+    complexity: 'muy_baja',
+    satiety: 'medio',
+    costCategory: 'medio',
+    tags: ['sin_fuego', 'express', 'fresco'],
+    photoUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Arroz blanco o integral', inventoryItemId: 'inv_arroz', quantityDemo: '1 taza cocida', isCore: true },
+      { name: 'Atún en lata', inventoryItemId: 'inv_atun', quantityDemo: '1 lata escurrida', isCore: true },
+      { name: 'Palta / Aguacate', inventoryItemId: 'inv_palta', quantityDemo: '1/2 unidad en cubos', isCore: true },
+      { name: 'Tomates', inventoryItemId: 'inv_tomates', quantityDemo: '1 unidad cortada', isCore: false },
+    ],
+    steps: [
+      'Servir la base de arroz en un bowl.',
+      'Añadir el atún escurrido por encima.',
+      'Cortar el tomate y la palta e incorporarlos.',
+      'Condimentar con jugo de limón, oliva y pizca de sal.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 410 kcal, grasas saludables).',
+      demoCaloriesApprox: 410,
+    }
+  },
+  {
+    id: 'rec_tostadas_huevo_palta',
+    name: 'Tostadón integral con huevo revuelto y palta',
+    description: 'Perfecto para desayuno, merienda o cena liviana de 5 minutos.',
+    mealMoments: ['desayuno', 'merienda', 'cena'],
+    prepTimeMinutes: 8,
+    complexity: 'muy_baja',
+    satiety: 'ligero',
+    costCategory: 'economico',
+    tags: ['desayuno', 'merienda', 'express', 'pocos_ingredientes'],
+    photoUrl: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Pan integral / masa madre', inventoryItemId: 'inv_pan', quantityDemo: '2 rodajas tostadas', isCore: true },
+      { name: 'Huevos', inventoryItemId: 'inv_huevos', quantityDemo: '2 unidades', isCore: true },
+      { name: 'Palta / Aguacate', inventoryItemId: 'inv_palta', quantityDemo: '1/2 pisada', isCore: false },
+      { name: 'Tomates', inventoryItemId: 'inv_tomates', quantityDemo: 'Rodajas finas', isCore: false, optional: true },
+    ],
+    steps: [
+      'Tostar las rodajas de pan.',
+      'Batir los huevos y revolverlos a fuego suave en sartén durante 2 minutos.',
+      'Untar la palta sobre la tostada, coronar con el huevo revuelto y sal marina.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 340 kcal, desayuno balanceado).',
+      demoCaloriesApprox: 340,
+    }
+  },
+  {
+    id: 'rec_porridge_avena',
+    name: 'Bowl tibio de avena cremosa con frutas',
+    description: 'Desayuno o merienda energizante, digestivo y listo en menos de 10 minutos.',
+    mealMoments: ['desayuno', 'merienda'],
+    prepTimeMinutes: 7,
+    complexity: 'muy_baja',
+    satiety: 'medio',
+    costCategory: 'economico',
+    tags: ['desayuno', 'merienda', 'energizante', 'dulce_natural'],
+    photoUrl: 'https://images.unsplash.com/photo-1517673400267-0251440c45dc?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Avena en copos', inventoryItemId: 'inv_avena', quantityDemo: '40g (4 cdas)', isCore: true },
+      { name: 'Leche o bebida vegetal', inventoryItemId: 'inv_leche', quantityDemo: '180 ml', isCore: true },
+    ],
+    steps: [
+      'Calentar la leche con la avena en una ollita a fuego medio.',
+      'Revolver durante 4 minutos hasta espesar.',
+      'Servir en un tazón con una cucharadita de miel o canela.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 260 kcal, fibra soluble).',
+      demoCaloriesApprox: 260,
+    }
+  },
+  {
+    id: 'rec_revuelto_gramajo_espinaca',
+    name: 'Revuelto suave de huevos con espinaca y queso',
+    description: 'Plato reconfortante, rápido y cargado de nutrientes para cuando no querés pensar.',
+    mealMoments: ['almuerzo', 'cena'],
+    prepTimeMinutes: 11,
+    complexity: 'muy_baja',
+    satiety: 'medio',
+    costCategory: 'economico',
+    tags: ['rápido', 'vegetariano', 'aprovechamiento', 'bajo_esfuerzo'],
+    photoUrl: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Huevos', inventoryItemId: 'inv_huevos', quantityDemo: '3 unidades', isCore: true },
+      { name: 'Espinaca fresca', inventoryItemId: 'inv_espinaca', quantityDemo: '1 taza picada', isCore: true },
+      { name: 'Queso cremoso / mozzarella', inventoryItemId: 'inv_queso', quantityDemo: '40g en hebras', isCore: true },
+      { name: 'Cebollas', inventoryItemId: 'inv_cebolla', quantityDemo: '1/4 unidad picada', isCore: false },
+    ],
+    steps: [
+      'Saltear la cebolla y la espinaca en sartén con aceite por 2 minutos.',
+      'Batir los huevos ligeramente y volcarlos a la sartén a fuego bajo.',
+      'Mover con espátula suavemente mientras se cuaja (2 min).',
+      'Sumar el queso al final para que funda con el calor residual.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 310 kcal).',
+      demoCaloriesApprox: 310,
+    }
+  },
+  {
+    id: 'rec_guiso_arroz_pollo_lento',
+    name: 'Cazuela casera de arroz con pollo y vegetales',
+    description: 'Plato tradicional y reconfortante de cocción prolongada para cuando tenés tiempo y ganas de cocinar.',
+    mealMoments: ['almuerzo', 'cena'],
+    prepTimeMinutes: 48,
+    complexity: 'alta',
+    satiety: 'contundente',
+    costCategory: 'medio',
+    tags: ['tradicional', 'tiempo_dedicado', 'contundente', 'olla'],
+    photoUrl: 'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Pechuga de pollo', inventoryItemId: 'inv_pollo', quantityDemo: '300g trozado', isCore: true },
+      { name: 'Arroz blanco o integral', inventoryItemId: 'inv_arroz', quantityDemo: '1 taza', isCore: true },
+      { name: 'Cebollas', inventoryItemId: 'inv_cebolla', quantityDemo: '1 unidad entera picada', isCore: true },
+      { name: 'Tomates', inventoryItemId: 'inv_tomates', quantityDemo: '2 unidades procesados', isCore: true },
+      { name: 'Zucchini / Calabacín', inventoryItemId: 'inv_zucchini', quantityDemo: '1 unidad en cubos', isCore: false },
+    ],
+    steps: [
+      'Sellar los trozos de pollo en olla con aceite hasta dorar (8 min).',
+      'Agregar la cebolla y los vegetales, sofriendo a fuego medio 10 min.',
+      'Incorporar el tomate procesado, caldo o agua tibia y condimentos.',
+      'Sumar el arroz y cocinar tapado a fuego bajo durante 20-25 minutos hasta que todo esté tierno.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 540 kcal, plato de olla contundente).',
+      demoCaloriesApprox: 540,
+    }
+  },
+  {
+    id: 'rec_omelette_espinaca_tomate',
+    name: 'Omelette francés de espinaca y tomate seco o fresco',
+    description: 'Ligero, limpio y con vegetales verdes para sentirse liviano.',
+    mealMoments: ['desayuno', 'almuerzo', 'cena'],
+    prepTimeMinutes: 10,
+    complexity: 'muy_baja',
+    satiety: 'ligero',
+    costCategory: 'economico',
+    tags: ['liviano', 'keto_friendly', 'rápido', 'vegetariano'],
+    photoUrl: 'https://images.unsplash.com/photo-1510693206972-df098062cb71?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Huevos', inventoryItemId: 'inv_huevos', quantityDemo: '2 unidades', isCore: true },
+      { name: 'Espinaca fresca', inventoryItemId: 'inv_espinaca', quantityDemo: '1 puñado tierno', isCore: true },
+      { name: 'Tomates', inventoryItemId: 'inv_tomates', quantityDemo: '1/2 unidad en cubitos', isCore: false },
+    ],
+    steps: [
+      'Batir los huevos con una pizca de sal.',
+      'Colocar en sartén engrasada caliente.',
+      'Distribuir las hojas de espinaca y tomate por encima.',
+      'Plegar a la mitad cuando el borde esté firme y servir jugoso en el centro.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 210 kcal).',
+      demoCaloriesApprox: 210,
+    }
+  },
+  {
+    id: 'rec_ensalada_tibia_zucchini_queso',
+    name: 'Ensalada tibia de zucchini dorado con queso y huevo poché',
+    description: 'Fresca pero templada, balanceada y rápida de ensamblar.',
+    mealMoments: ['almuerzo', 'cena'],
+    prepTimeMinutes: 15,
+    complexity: 'baja',
+    satiety: 'medio',
+    costCategory: 'economico',
+    tags: ['saludable', 'vegetariano', 'fibra'],
+    photoUrl: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Zucchini / Calabacín', inventoryItemId: 'inv_zucchini', quantityDemo: '1 unidad en rodajas finas', isCore: true },
+      { name: 'Huevos', inventoryItemId: 'inv_huevos', quantityDemo: '1 o 2 unidades', isCore: true },
+      { name: 'Queso cremoso / mozzarella', inventoryItemId: 'inv_queso', quantityDemo: '40g', isCore: true },
+      { name: 'Tomates', inventoryItemId: 'inv_tomates', quantityDemo: '1 unidad', isCore: false },
+    ],
+    steps: [
+      'Grillar las rodajas de zucchini en plancha caliente 2 min por lado.',
+      'Hacer un huevo poché o pasado por agua (3 min).',
+      'Armar el plato con el zucchini tibio, el tomate fresco, dados de queso y coronar con el huevo.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 290 kcal).',
+      demoCaloriesApprox: 290,
+    }
+  },
+  {
+    id: 'rec_pastel_carne_horno',
+    name: 'Pastel de carne con puré al horno',
+    description: 'Plato clásico elaborado de horno (requiere carne picada no disponible actualmente).',
+    mealMoments: ['almuerzo', 'cena'],
+    prepTimeMinutes: 55,
+    complexity: 'alta',
+    satiety: 'contundente',
+    costCategory: 'alto',
+    tags: ['horno', 'carne', 'elaborado'],
+    photoUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=800&auto=format&fit=crop&q=80',
+    ingredients: [
+      { name: 'Carne vacuna picada', inventoryItemId: 'inv_carne_picada', quantityDemo: '500g', isCore: true },
+      { name: 'Cebollas', inventoryItemId: 'inv_cebolla', quantityDemo: '2 unidades', isCore: true },
+      { name: 'Huevos', inventoryItemId: 'inv_huevos', quantityDemo: '2 unidades duros', isCore: false },
+    ],
+    steps: [
+      'Sofreír la carne con cebolla durante 15 minutos.',
+      'Hacer puré de papas o zapallo aparte.',
+      'Disponer en fuente para horno y gratinar 25 minutos.'
+    ],
+    syntheticMeta: {
+      isDemo: true,
+      nutritionNote: 'Estimación sintética de fixture para UX (aprox. 620 kcal).',
+      demoCaloriesApprox: 620,
+    }
+  }
+];
+
+export const INITIAL_RECENT_MEALS: MealEvent[] = [
+  {
+    id: 'hist_1',
+    timestamp: new Date(Date.now() - 24 * 3600 * 1000 * 1.5).toISOString(), // ~36 horas atrás
+    mealMoment: 'cena',
+    selectedRecipeId: 'rec_pasta_tomate_queso',
+    recipeName: 'Pasta simple con tomates frescos y queso fundido',
+    wasSuggested: true,
+    contextSnapshot: {
+      moment: 'cena',
+      hunger: 'normal',
+      energy: 'baja',
+      timeLimit: '15min',
+      priority: 'rapido',
+    },
+  },
+  {
+    id: 'hist_2',
+    timestamp: new Date(Date.now() - 24 * 3600 * 1000 * 0.8).toISOString(), // ~19 horas atrás (ayer almuerzo)
+    mealMoment: 'almuerzo',
+    customText: 'Milanesa con puré en casa de mis padres',
+    wasSuggested: false,
+    contextSnapshot: {
+      moment: 'almuerzo',
+      hunger: 'mucha',
+      energy: 'normal',
+    },
+  },
+  {
+    id: 'hist_3',
+    timestamp: new Date(Date.now() - 3600 * 1000 * 4).toISOString(), // Hoy temprano (desayuno)
+    mealMoment: 'desayuno',
+    selectedRecipeId: 'rec_porridge_avena',
+    recipeName: 'Bowl tibio de avena cremosa con frutas',
+    wasSuggested: true,
+    contextSnapshot: {
+      moment: 'desayuno',
+      hunger: 'poca',
+      energy: 'normal',
+      timeLimit: '15min',
+    },
+  },
+];
+
+export function getInitialMomentByHour(): UserContext['moment'] {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 11) return 'desayuno';
+  if (hour >= 11 && hour < 16) return 'almuerzo';
+  if (hour >= 16 && hour < 20) return 'merienda';
+  return 'cena';
+}
+
+export const INITIAL_USER_CONTEXT: UserContext = {
+  moment: getInitialMomentByHour(),
+  hunger: 'normal',
+  energy: 'normal',
+  timeLimit: '30min',
+  motivation: 'normales',
+  priority: 'automatico',
+  lastUpdated: new Date().toISOString(),
+};
