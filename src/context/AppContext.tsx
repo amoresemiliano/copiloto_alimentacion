@@ -14,6 +14,9 @@ import {
   PlanDay,
   MealMoment,
   ShoppingItemStatus,
+  AffinityProfile,
+  BehavioralSignal,
+  HypothesisStatus,
 } from '../types/domain';
 import { storageService } from '../services/storageService';
 import { telemetryService } from '../services/telemetryService';
@@ -22,6 +25,7 @@ import { calculateShoppingNeeds } from '../services/shoppingNeedsService';
 import { shoppingService } from '../services/shoppingService';
 import { inventoryMergeService, InventoryMergeResult } from '../services/inventoryMergeService';
 import { planningService } from '../services/planningService';
+import { learningService } from '../services/learningService';
 import {
   INITIAL_INVENTORY_ITEMS,
   INITIAL_RECIPES,
@@ -123,6 +127,15 @@ interface AppContextType {
   updateShoppingItemQuantity: (id: string, quantityText: string, numeric?: number) => void;
   syncShoppingList: () => void;
   finalizePurchase: () => InventoryMergeResult;
+
+  // Phase 4: Learning and Behavioral Intelligence
+  affinityProfile: AffinityProfile;
+  behavioralSignals: BehavioralSignal[];
+  updateHypothesisStatus: (id: string, status: HypothesisStatus) => void;
+  toggleFavoriteIngredient: (ingredientName: string) => void;
+  toggleAvoidedIngredient: (ingredientName: string) => void;
+  resetLearningProfile: () => void;
+  recordExplicitSignal: (signal: Omit<BehavioralSignal, 'id' | 'timestamp'>) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -142,6 +155,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>(() => storageService.getShoppingItems());
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseEvent[]>(() => storageService.getPurchaseHistory());
   const [isShoppingActiveMode, setIsShoppingActiveMode] = useState<boolean>(false);
+
+  // Phase 4 Behavioral & Learning State
+  const [explicitSignals, setExplicitSignals] = useState<BehavioralSignal[]>(() => storageService.getBehavioralSignals());
+  const [customProfileOverrides, setCustomProfileOverrides] = useState<Partial<AffinityProfile>>(() => {
+    const saved = storageService.getAffinityProfile();
+    return saved || { favoriteIngredients: ['Huevos', 'Tomates'], avoidedIngredients: [] };
+  });
+
+  const behavioralSignals = useMemo(() => {
+    const derived = learningService.deriveSignalsFromHistory(recentMeals, [], plannedMeals, recipes);
+    return [...explicitSignals, ...derived];
+  }, [recentMeals, plannedMeals, recipes, explicitSignals]);
+
+  const affinityProfile = useMemo(() => {
+    const profile = learningService.calculateAffinityProfile(behavioralSignals, customProfileOverrides, recipes);
+    storageService.saveAffinityProfile(profile);
+    return profile;
+  }, [behavioralSignals, customProfileOverrides, recipes]);
 
   // Modals
   const [detailRecommendation, setDetailRecommendation] = useState<Recommendation | null>(null);
@@ -164,10 +195,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTelemetryEvents(telemetryService.getEvents());
   }, []);
 
-  // Compute recommendations deterministically whenever inputs change
+  // Compute recommendations deterministically whenever inputs change (including Phase 4 affinityProfile)
   const allRankedRecommendations = useMemo(() => {
-    return rankRecipes(recipes, context, inventory, recentMeals, rejectedRecipeIds);
-  }, [recipes, context, inventory, recentMeals, rejectedRecipeIds]);
+    return rankRecipes(recipes, context, inventory, recentMeals, rejectedRecipeIds, affinityProfile);
+  }, [recipes, context, inventory, recentMeals, rejectedRecipeIds, affinityProfile]);
 
   // Limit to top 4 recommendations for the main view to reduce decision fatigue (or filtered by utilization focus)
   const visibleRecommendations = useMemo(() => {
@@ -729,6 +760,110 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return result;
   }, [shoppingItems, inventory, purchaseHistory]);
 
+  // Phase 4 Behavioral Actions
+  const recordExplicitSignal = useCallback((signalData: Omit<BehavioralSignal, 'id' | 'timestamp'>) => {
+    const newSignal: BehavioralSignal = {
+      ...signalData,
+      id: `sig_explicit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+    };
+    setExplicitSignals((prev) => {
+      const next = [newSignal, ...prev];
+      storageService.saveBehavioralSignals(next);
+      return next;
+    });
+    telemetryService.track('signal_recorded', {
+      source: newSignal.source,
+      type: newSignal.type,
+      recipeId: newSignal.recipeId,
+      weight: newSignal.weight,
+    });
+    setTelemetryEvents(telemetryService.getEvents());
+  }, []);
+
+  const updateHypothesisStatus = useCallback((id: string, status: HypothesisStatus) => {
+    setCustomProfileOverrides((prev) => {
+      const currentHypotheses = prev.hypotheses || affinityProfile.hypotheses;
+      const updatedHypotheses = currentHypotheses.map((h) =>
+        h.id === id
+          ? {
+              ...h,
+              status,
+              confidence: (status === 'confirmed_by_user' ? 'alta' : status === 'dismissed_by_user' ? 'baja' : h.confidence) as 'baja' | 'media' | 'alta',
+              updatedAt: new Date().toISOString(),
+            }
+          : h
+      );
+      const next = { ...prev, hypotheses: updatedHypotheses };
+      storageService.saveAffinityProfile({ ...affinityProfile, hypotheses: updatedHypotheses });
+      return next;
+    });
+    telemetryService.track('hypothesis_updated', {
+      hypothesisId: id,
+      newStatus: status,
+    });
+    setTelemetryEvents(telemetryService.getEvents());
+  }, [affinityProfile]);
+
+  const toggleFavoriteIngredient = useCallback((ingredientName: string) => {
+    setCustomProfileOverrides((prev) => {
+      const currentFavs = prev.favoriteIngredients || affinityProfile.favoriteIngredients;
+      const isFav = currentFavs.some((i) => i.toLowerCase() === ingredientName.toLowerCase());
+      const nextFavs = isFav
+        ? currentFavs.filter((i) => i.toLowerCase() !== ingredientName.toLowerCase())
+        : [...currentFavs, ingredientName];
+
+      // Remove from avoided if making it favorite
+      const currentAvoided = prev.avoidedIngredients || affinityProfile.avoidedIngredients;
+      const nextAvoided = currentAvoided.filter((i) => i.toLowerCase() !== ingredientName.toLowerCase());
+
+      const next = { ...prev, favoriteIngredients: nextFavs, avoidedIngredients: nextAvoided };
+      storageService.saveAffinityProfile({ ...affinityProfile, favoriteIngredients: nextFavs, avoidedIngredients: nextAvoided });
+      return next;
+    });
+    telemetryService.track('affinity_profile_updated', {
+      action: 'toggle_favorite',
+      ingredient: ingredientName,
+    });
+    setTelemetryEvents(telemetryService.getEvents());
+  }, [affinityProfile]);
+
+  const toggleAvoidedIngredient = useCallback((ingredientName: string) => {
+    setCustomProfileOverrides((prev) => {
+      const currentAvoided = prev.avoidedIngredients || affinityProfile.avoidedIngredients;
+      const isAvoided = currentAvoided.some((i) => i.toLowerCase() === ingredientName.toLowerCase());
+      const nextAvoided = isAvoided
+        ? currentAvoided.filter((i) => i.toLowerCase() !== ingredientName.toLowerCase())
+        : [...currentAvoided, ingredientName];
+
+      // Remove from favorites if avoiding
+      const currentFavs = prev.favoriteIngredients || affinityProfile.favoriteIngredients;
+      const nextFavs = currentFavs.filter((i) => i.toLowerCase() !== ingredientName.toLowerCase());
+
+      const next = { ...prev, favoriteIngredients: nextFavs, avoidedIngredients: nextAvoided };
+      storageService.saveAffinityProfile({ ...affinityProfile, favoriteIngredients: nextFavs, avoidedIngredients: nextAvoided });
+      return next;
+    });
+    telemetryService.track('affinity_profile_updated', {
+      action: 'toggle_avoided',
+      ingredient: ingredientName,
+    });
+    setTelemetryEvents(telemetryService.getEvents());
+  }, [affinityProfile]);
+
+  const resetLearningProfile = useCallback(() => {
+    setExplicitSignals([]);
+    setCustomProfileOverrides({
+      favoriteIngredients: [],
+      avoidedIngredients: [],
+      hypotheses: [],
+    });
+    storageService.saveBehavioralSignals([]);
+    storageService.saveAffinityProfile(null);
+    telemetryService.track('learning_profile_reset', {});
+    setTelemetryEvents(telemetryService.getEvents());
+  }, []);
+
   const resetAllFixtures = useCallback(() => {
     storageService.resetAllToFixtures();
     setContext({ ...INITIAL_USER_CONTEXT });
@@ -741,6 +876,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setChosenRecipeId(null);
     setUtilizationFilterIngredient(null);
     setIsShoppingActiveMode(false);
+    setExplicitSignals([]);
+    setCustomProfileOverrides({ favoriteIngredients: ['Huevos', 'Tomates'], avoidedIngredients: [] });
     telemetryService.track('fixtures_reset', {});
     setTelemetryEvents(telemetryService.getEvents());
   }, []);
@@ -776,6 +913,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     isPlanMealModalOpen,
     planMealPrefillRecipe,
 
+    // Phase 4 state
+    affinityProfile,
+    behavioralSignals,
+
     setTab: setCurrentTab,
     updateContext,
     selectRecommendation,
@@ -810,6 +951,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateShoppingItemQuantity,
     syncShoppingList,
     finalizePurchase,
+
+    // Phase 4 Actions
+    updateHypothesisStatus,
+    toggleFavoriteIngredient,
+    toggleAvoidedIngredient,
+    resetLearningProfile,
+    recordExplicitSignal,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

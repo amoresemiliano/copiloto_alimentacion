@@ -1,6 +1,6 @@
 {
   "name": "Copiloto de Alimentación",
-  "description": "Copiloto doméstico para decidir qué comer ahora, planificar comidas próximas y generar compras derivadas según stock útil sin fricción.",
+  "description": "Copiloto doméstico con inteligencia de aprendizaje comportamental prudente, historial consolidado, perfil de afinidad explicable, planificación y compras integradas.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

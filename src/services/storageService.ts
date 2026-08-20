@@ -6,6 +6,8 @@ import {
   PlannedMeal,
   ShoppingItem,
   PurchaseEvent,
+  AffinityProfile,
+  BehavioralSignal,
 } from '../types/domain';
 import {
   INITIAL_INVENTORY_ITEMS,
@@ -26,6 +28,8 @@ const KEYS = {
   PLANNED_MEALS: 'copiloto_planned_meals_v1',
   SHOPPING_ITEMS: 'copiloto_shopping_items_v1',
   PURCHASE_HISTORY: 'copiloto_purchase_history_v1',
+  AFFINITY_PROFILE: 'copiloto_affinity_profile_v1',
+  BEHAVIORAL_SIGNALS: 'copiloto_behavioral_signals_v1',
 };
 
 export class StorageService {
@@ -180,6 +184,42 @@ export class StorageService {
     }
   }
 
+  public getAffinityProfile(): AffinityProfile | null {
+    try {
+      const raw = localStorage.getItem(KEYS.AFFINITY_PROFILE);
+      if (raw) return JSON.parse(raw);
+    } catch {
+      // fallback
+    }
+    return null;
+  }
+
+  public saveAffinityProfile(profile: AffinityProfile): void {
+    try {
+      localStorage.setItem(KEYS.AFFINITY_PROFILE, JSON.stringify(profile));
+    } catch {
+      // fallback
+    }
+  }
+
+  public getBehavioralSignals(): BehavioralSignal[] {
+    try {
+      const raw = localStorage.getItem(KEYS.BEHAVIORAL_SIGNALS);
+      if (raw) return JSON.parse(raw);
+    } catch {
+      // fallback
+    }
+    return [];
+  }
+
+  public saveBehavioralSignals(signals: BehavioralSignal[]): void {
+    try {
+      localStorage.setItem(KEYS.BEHAVIORAL_SIGNALS, JSON.stringify(signals));
+    } catch {
+      // fallback
+    }
+  }
+
   public resetAllToFixtures(): void {
     try {
       localStorage.removeItem(KEYS.INVENTORY);
@@ -190,6 +230,8 @@ export class StorageService {
       localStorage.removeItem(KEYS.PLANNED_MEALS);
       localStorage.removeItem(KEYS.SHOPPING_ITEMS);
       localStorage.removeItem(KEYS.PURCHASE_HISTORY);
+      localStorage.removeItem(KEYS.AFFINITY_PROFILE);
+      localStorage.removeItem(KEYS.BEHAVIORAL_SIGNALS);
     } catch {
       // fallback
     }

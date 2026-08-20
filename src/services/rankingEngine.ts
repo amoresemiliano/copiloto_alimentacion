@@ -5,7 +5,9 @@ import {
   MealEvent,
   Recommendation,
   RecommendationFactors,
+  AffinityProfile,
 } from '../types/domain';
+import { learningService } from './learningService';
 
 export interface RankingWeights {
   momentFit: number;
@@ -369,10 +371,17 @@ export function deriveExplanationsAndPenalties(
   context: UserContext,
   factors: RecommendationFactors,
   missingCore: string[],
-  priorityUsed: string[]
+  priorityUsed: string[],
+  affinityReasons: string[] = [],
+  affinityPenalties: string[] = []
 ): { positiveReasons: string[]; penalties: string[] } {
   const positiveReasons: string[] = [];
   const penalties: string[] = [];
+
+  // Behavioral / Affinity learned reasons first if present
+  if (affinityReasons.length > 0) {
+    positiveReasons.push(...affinityReasons);
+  }
 
   // Priority Ingredients Utilization (only if factor contributed positively)
   if (priorityUsed.length > 0 && factors.utilizationFit > 0.1) {
@@ -417,7 +426,10 @@ export function deriveExplanationsAndPenalties(
     positiveReasons.push(`Buena combinación para ${context.moment} según tus preferencias.`);
   }
 
-  // Penalties
+  // Penalties (including avoided ingredients or habit mismatches)
+  if (affinityPenalties.length > 0) {
+    penalties.push(...affinityPenalties);
+  }
   if (missingCore.length > 0) {
     penalties.push(`Faltan ingredientes principales: ${missingCore.join(', ')}.`);
   }
@@ -442,7 +454,8 @@ export function rankRecipes(
   context: UserContext,
   inventory: InventoryItem[],
   recentMeals: MealEvent[],
-  rejectedRecipeIds: string[] = []
+  rejectedRecipeIds: string[] = [],
+  affinityProfile?: AffinityProfile
 ): Recommendation[] {
   const weights = getDynamicWeights(context);
 
@@ -457,6 +470,10 @@ export function rankRecipes(
       const invResult = evaluateInventoryAndUtilization(recipe, inventory);
       const varietyResult = scoreRecentVariety(recipe, recentMeals);
 
+      // Phase 4: Calculate affinity and contextual preference fits
+      const affinityResult = learningService.calculateAffinityFit(recipe, affinityProfile);
+      const contextPrefResult = learningService.calculateContextualPreferenceFit(recipe, affinityProfile, context);
+
       const factors: RecommendationFactors = {
         momentFit,
         timeFit,
@@ -466,10 +483,12 @@ export function rankRecipes(
         recentVarietyFit: varietyResult.score,
         priorityFit: 1.0, // calculated within weights
         utilizationFit: invResult.utilizationScore,
+        affinityFit: affinityResult.score,
+        contextualPreferenceFit: contextPrefResult.score,
       };
 
-      // Weighted score
-      const rawScore =
+      // Base weighted score
+      let rawScore =
         factors.momentFit * weights.momentFit +
         factors.timeFit * weights.timeFit +
         factors.effortFit * weights.effortFit +
@@ -478,16 +497,29 @@ export function rankRecipes(
         factors.recentVarietyFit * weights.recentVarietyFit +
         factors.utilizationFit * weights.utilizationFit;
 
+      // Phase 4: Prudent, non-distorting behavioral modulation
+      // When affinityFit === 0.5 (neutral/cold start), modulation is strictly 0.00
+      if (affinityProfile) {
+        const affinityBonus = (factors.affinityFit! - 0.5) * 0.16;
+        const contextPrefBonus = (factors.contextualPreferenceFit! - 0.5) * 0.12;
+        rawScore = rawScore + affinityBonus + contextPrefBonus;
+      }
+
       // Bound between 0.05 and 0.99
       const totalScore = Math.max(0.05, Math.min(0.99, rawScore));
       const matchPercentage = Math.round(totalScore * 100);
+
+      const allAffinityReasons = [...affinityResult.reasons, ...contextPrefResult.reasons];
+      const allAffinityPenalties = [...affinityResult.penalties, ...contextPrefResult.penalties];
 
       const { positiveReasons, penalties } = deriveExplanationsAndPenalties(
         recipe,
         context,
         factors,
         invResult.missingCoreIngredients,
-        invResult.priorityIngredientsUsed
+        invResult.priorityIngredientsUsed,
+        allAffinityReasons,
+        allAffinityPenalties
       );
 
       const recommendation: Recommendation = {

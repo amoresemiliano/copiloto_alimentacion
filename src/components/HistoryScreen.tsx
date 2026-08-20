@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { PlusCircle, CheckCircle2, Clock, MessageSquarePlus, Info, ShoppingBag, Calendar, ArrowRight } from 'lucide-react';
+import { PlusCircle, CheckCircle2, Clock, MessageSquarePlus, Info, ShoppingBag, Brain } from 'lucide-react';
+import { LearningProfileView } from './LearningProfileView';
 
 export const HistoryScreen: React.FC = () => {
-  const { recentMeals, purchaseHistory, openLogMealModal, setTab } = useApp();
-  const [activeSection, setActiveSection] = useState<'comidas' | 'compras'>('comidas');
+  const { recentMeals, purchaseHistory, affinityProfile, openLogMealModal, setTab } = useApp();
+  const [activeSection, setActiveSection] = useState<'comidas' | 'compras' | 'aprendizaje'>('comidas');
 
   const formatMealTime = (isoString: string) => {
     try {
@@ -21,16 +22,18 @@ export const HistoryScreen: React.FC = () => {
     }
   };
 
+  const activeHypothesesCount = (affinityProfile.activeHypotheses || []).filter((h) => h.status !== 'dismissed').length;
+
   return (
     <div id="history-screen" className="space-y-5 pb-12 animate-fadeIn">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-3xl border border-[#E5E5E3] shadow-xs">
         <div>
           <h1 className="text-xl font-black text-[#1A1A1A] tracking-tight">
-            Historial de Actividad
+            Historial y Aprendizaje
           </h1>
           <p className="text-xs text-[#666666] mt-0.5">
-            Registro real de comidas y compras para calibrar variedad y stock sin juzgar.
+            Registro de actividad real y perfil de comportamiento determinístico sin juicios.
           </p>
         </div>
 
@@ -43,7 +46,7 @@ export const HistoryScreen: React.FC = () => {
             <PlusCircle className="w-3.5 h-3.5 text-[#FF6321]" />
             <span>Registrar comida</span>
           </button>
-        ) : (
+        ) : activeSection === 'compras' ? (
           <button
             onClick={() => setTab('compras')}
             className="text-xs font-bold bg-[#1A1A1A] hover:bg-black text-white px-4 py-2.5 rounded-2xl transition-all flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
@@ -51,35 +54,52 @@ export const HistoryScreen: React.FC = () => {
             <ShoppingBag className="w-3.5 h-3.5 text-[#FF6321]" />
             <span>Ir a Compras</span>
           </button>
+        ) : (
+          <div className="text-[11px] font-bold text-[#2E7D32] bg-[#E8F5E9] border border-[#C8E6C9] px-3.5 py-1.5 rounded-xl flex items-center gap-1.5">
+            <span>{activeHypothesesCount} hipótesis activas</span>
+          </div>
         )}
       </div>
 
       {/* Section Switcher */}
-      <div className="grid grid-cols-2 gap-2 bg-[#EBEBEA] p-1 rounded-2xl border border-[#E0E0DE]">
+      <div className="grid grid-cols-3 gap-2 bg-[#EBEBEA] p-1 rounded-2xl border border-[#E0E0DE]">
         <button
           onClick={() => setActiveSection('comidas')}
-          className={`py-2 px-3 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-2 ${
+          className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 ${
             activeSection === 'comidas'
               ? 'bg-white text-[#1A1A1A] shadow-xs border border-[#E5E5E3]'
               : 'text-[#666666] hover:text-[#1A1A1A]'
           }`}
         >
-          <span>Comidas consumidas ({recentMeals.length})</span>
+          <span>Comidas ({recentMeals.length})</span>
         </button>
         <button
           onClick={() => setActiveSection('compras')}
-          className={`py-2 px-3 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-2 ${
+          className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 ${
             activeSection === 'compras'
               ? 'bg-white text-[#1A1A1A] shadow-xs border border-[#E5E5E3]'
               : 'text-[#666666] hover:text-[#1A1A1A]'
           }`}
         >
-          <span>Compras realizadas ({purchaseHistory.length})</span>
+          <span>Compras ({purchaseHistory.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveSection('aprendizaje')}
+          className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 ${
+            activeSection === 'aprendizaje'
+              ? 'bg-white text-[#1A1A1A] shadow-xs border border-[#E5E5E3]'
+              : 'text-[#666666] hover:text-[#1A1A1A]'
+          }`}
+        >
+          <Brain className="w-3.5 h-3.5 text-[#FF6321]" />
+          <span>Aprendiendo de vos</span>
         </button>
       </div>
 
       {/* Content based on active section */}
-      {activeSection === 'comidas' ? (
+      {activeSection === 'aprendizaje' ? (
+        <LearningProfileView />
+      ) : activeSection === 'comidas' ? (
         <div className="bg-white rounded-3xl border border-[#E5E5E3] overflow-hidden shadow-xs divide-y divide-[#F0F0F0]">
           {recentMeals.length > 0 ? (
             recentMeals.map((meal) => {
